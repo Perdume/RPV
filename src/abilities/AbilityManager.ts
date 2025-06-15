@@ -1,56 +1,59 @@
 import { EventSystem } from '../EventSystem';
 import { GameEventType } from '../events';
-import { Ability, AbilityContext } from './Ability';
 import { BaseAbility } from './BaseAbility';
+import { AbilityContext } from './Ability';
 import { Player } from '../types/game.types';
-
-interface AbilityInstance {
-  ability: BaseAbility;
-  currentCooldown: number;
-  remainingUses: number;
-}
+import { Debug } from './Debug';
 
 export class AbilityManager {
-  private abilities: Map<string, Ability>;
-  private playerAbilities: Map<number, Ability>;
+  private abilities: Map<string, BaseAbility> = new Map();
+  private playerAbilities: Map<number, BaseAbility> = new Map();
+  private gameState: { players: Player[] } | null = null;
   private eventSystem: EventSystem;
-  private gameState: any;
+  private logs: string[] = [];
+  private variables: Map<string, any> = new Map();
 
   constructor(eventSystem: EventSystem) {
-    this.abilities = new Map();
-    this.playerAbilities = new Map();
     this.eventSystem = eventSystem;
+    this.registerDefaultAbilities();
     this.setupEventListeners();
   }
 
-  setGameState(gameState: any): void {
-    this.gameState = gameState;
+  private registerDefaultAbilities(): void {
+    // Debug 능력 등록
+    const debug = new Debug();
+    this.abilities.set('debug', debug);
   }
 
   private setupEventListeners(): void {
-    // 턴 시작 이벤트
     this.eventSystem.on(GameEventType.TURN_START, this.handleTurnStart.bind(this));
-
-    // 턴 종료 이벤트
     this.eventSystem.on(GameEventType.TURN_END, this.handleTurnEnd.bind(this));
-
-    // 공격 이벤트
     this.eventSystem.on(GameEventType.ATTACK, this.handleAttack.bind(this));
-
-    // 방어 이벤트
     this.eventSystem.on(GameEventType.DEFEND, this.handleDefend.bind(this));
-
-    // 회피 이벤트
     this.eventSystem.on(GameEventType.EVADE, this.handleEvade.bind(this));
-
-    // 데미지 이벤트
-    this.eventSystem.on(GameEventType.DAMAGE, this.handleDamage.bind(this));
-
-    // 사망 이벤트
     this.eventSystem.on(GameEventType.DEATH, this.handleDeath.bind(this));
-
-    // 능력 사용 이벤트
+    this.eventSystem.on(GameEventType.FOCUS_ATTACK, this.handleFocusAttack.bind(this));
     this.eventSystem.on(GameEventType.ABILITY_USE, this.handleAbilityUse.bind(this));
+    this.eventSystem.on(GameEventType.GAME_START, this.handleGameStart.bind(this));
+    this.eventSystem.on(GameEventType.GAME_END, this.handleGameEnd.bind(this));
+  }
+
+  setGameState(gameState: { players: Player[] }): void {
+    this.gameState = gameState;
+    // 게임 상태가 변경될 때마다 로그 초기화
+    this.logs = [];
+    this.variables = new Map();
+  }
+
+  assignAbility(playerId: number, abilityId: string): void {
+    const ability = this.abilities.get(abilityId);
+    if (ability) {
+      this.playerAbilities.set(playerId, ability);
+    }
+  }
+
+  private findPlayer(playerId: number): Player | undefined {
+    return this.gameState?.players.find(p => p.id === playerId);
   }
 
   private createContext(player: Player, target?: Player): AbilityContext {
@@ -59,153 +62,154 @@ export class AbilityManager {
       target,
       players: this.gameState?.players || [],
       eventSystem: this.eventSystem,
-      logs: [],
-      variables: new Map(),
-      currentTurn: this.gameState?.currentTurn || 0
+      variables: this.variables,
+      currentTurn: 0, // TODO: Get current turn from game state
+      logs: this.logs
     };
   }
 
-  public registerAbility(ability: Ability): void {
-    this.abilities.set(ability.id, ability);
-  }
-
-  public assignAbility(playerId: number, abilityId: string): void {
-    const ability = this.abilities.get(abilityId);
-    if (ability) {
-      this.playerAbilities.set(playerId, ability);
-    }
-  }
-
-  public getPlayerAbility(playerId: number): Ability | undefined {
-    return this.playerAbilities.get(playerId);
-  }
-
-  public getPlayerAbilities(playerId: number): Ability[] {
-    const ability = this.playerAbilities.get(playerId);
-    return ability ? [ability] : [];
-  }
-
-  public updateCooldowns(): void {
-    for (const [playerId, ability] of this.playerAbilities) {
-      if (ability.cooldown > 0) {
-        ability.cooldown--;
-      }
-    }
-  }
-
   private async handleTurnStart(event: any): Promise<void> {
-    const player = this.findPlayer(event.data.playerId);
-    if (!player) return;
-        
-    const ability = this.playerAbilities.get(player.id);
-    if (ability?.onTurnStart) {
-      const context = this.createContext(player);
-      await ability.onTurnStart(context);
+    const { turn } = event.data;
+    for (const [playerId, ability] of this.playerAbilities) {
+      const player = this.findPlayer(playerId);
+      if (player) {
+        const context = this.createContext(player);
+        context.currentTurn = turn;
+        await ability.onTurnStart(context);
+      }
     }
   }
 
   private async handleTurnEnd(event: any): Promise<void> {
-    const player = this.findPlayer(event.data.playerId);
-    if (!player) return;
-
-    const ability = this.playerAbilities.get(player.id);
-    if (ability?.onTurnEnd) {
-      const context = this.createContext(player);
-      await ability.onTurnEnd(context);
+    const { turn } = event.data;
+    for (const [playerId, ability] of this.playerAbilities) {
+      const player = this.findPlayer(playerId);
+      if (player) {
+        const context = this.createContext(player);
+        context.currentTurn = turn;
+        await ability.onTurnEnd(context);
+      }
     }
   }
 
   private async handleAttack(event: any): Promise<void> {
-    const attacker = this.findPlayer(event.data.attacker);
-    const target = this.findPlayer(event.data.target);
-    if (!attacker || !target) return;
-
-    const ability = this.playerAbilities.get(attacker.id);
-    if (ability?.onAttack) {
-      const context = this.createContext(attacker, target);
-      await ability.onAttack(context);
+    const { attacker, target } = event.data;
+    const attackerPlayer = this.findPlayer(attacker);
+    const targetPlayer = this.findPlayer(target);
+    
+    if (attackerPlayer && targetPlayer) {
+      const ability = this.playerAbilities.get(attacker);
+      if (ability) {
+        const context = this.createContext(attackerPlayer, targetPlayer);
+        await ability.onAttack(context);
+      }
     }
   }
 
   private async handleDefend(event: any): Promise<void> {
-    const player = this.findPlayer(event.data.player);
-    if (!player) return;
-
-    const ability = this.playerAbilities.get(player.id);
-    if (ability?.onDefend) {
-      const context = this.createContext(player);
-      await ability.onDefend(context);
+    const { player } = event.data;
+    const playerObj = this.findPlayer(player);
+    if (playerObj) {
+      const ability = this.playerAbilities.get(player);
+      if (ability) {
+        const context = this.createContext(playerObj);
+        await ability.onDefend(context);
+      }
     }
   }
 
   private async handleEvade(event: any): Promise<void> {
-    const player = this.findPlayer(event.data.player);
-    if (!player) return;
-
-    const ability = this.playerAbilities.get(player.id);
-    if (ability?.onEvade) {
-      const context = this.createContext(player);
-      await ability.onEvade(context);
+    const { player, attacker } = event.data;
+    const playerObj = this.findPlayer(player);
+    const attackerObj = attacker ? this.findPlayer(attacker) : undefined;
+    
+    if (playerObj) {
+      const ability = this.playerAbilities.get(player);
+      if (ability) {
+        const context = this.createContext(playerObj, attackerObj);
+        await ability.onEvade(context);
       }
-    }
-
-  private async handleDamage(event: any): Promise<void> {
-    const player = this.findPlayer(event.data.player);
-    if (!player) return;
-
-    const ability = this.playerAbilities.get(player.id);
-    if (ability?.onDamage) {
-      const context = this.createContext(player);
-      await ability.onDamage(context);
     }
   }
 
   private async handleDeath(event: any): Promise<void> {
-    const player = this.findPlayer(event.data.player);
-    if (!player) return;
+    const { player, killer } = event.data;
+    const playerObj = this.findPlayer(player);
+    const killerObj = killer ? this.findPlayer(killer) : undefined;
+    
+    if (playerObj) {
+      const ability = this.playerAbilities.get(player);
+      if (ability) {
+        const context = this.createContext(playerObj, killerObj);
+        await ability.onDeath(context);
+      }
+    }
+  }
 
-    const ability = this.playerAbilities.get(player.id);
-    if (ability?.onDeath) {
-      const context = this.createContext(player);
-      await ability.onDeath(context);
+  private async handleFocusAttack(event: any): Promise<void> {
+    const { attacker, target } = event.data;
+    const attackerPlayer = this.findPlayer(attacker);
+    const targetPlayer = this.findPlayer(target);
+    
+    if (attackerPlayer && targetPlayer) {
+      const ability = this.playerAbilities.get(attacker);
+      if (ability) {
+        const context = this.createContext(attackerPlayer, targetPlayer);
+        await ability.onFocusAttack(context);
+      }
     }
   }
 
   private async handleAbilityUse(event: any): Promise<void> {
-    const playerId = event.data.playerId;
-    const player = this.findPlayer(playerId);
-    if (!player) return;
-
-    const ability = this.playerAbilities.get(playerId);
-    if (!ability) {
-      console.error(`[오류] ${playerId}은(는) ${event.data.abilityId} 능력을 가지고 있지 않습니다.`);
-      return;
-    }
-
-    if (ability.cooldown > 0) {
-      console.error(`[오류] ${playerId}의 ${ability.name} 능력이 아직 쿨다운 중입니다. (${ability.cooldown}턴 남음)`);
-      return;
-    }
-
-    if (ability.maxUses > 0 && player.abilityUses >= ability.maxUses) {
-      console.error(`[오류] ${playerId}의 ${ability.name} 능력 사용 횟수가 모두 소진되었습니다.`);
-      return;
-    }
-
-    const target = event.data.targetId ? this.findPlayer(event.data.targetId) : undefined;
-    const context = this.createContext(player, target);
-
-    try {
-      await ability.use(context);
-      player.abilityUses++;
-      console.log(`[DEBUG] Ability ${ability.name} used successfully by player ${playerId}`);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
-      console.error(`[오류] ${playerId}의 ${ability.name} 능력 사용 중 오류가 발생했습니다: ${errorMessage}`);
+    const { player, target } = event.data;
+    const playerObj = this.findPlayer(player);
+    const targetObj = target ? this.findPlayer(target) : undefined;
+    
+    if (playerObj) {
+      const ability = this.playerAbilities.get(player);
+      if (ability) {
+        const context = this.createContext(playerObj, targetObj);
+        await ability.onAbilityUse(context);
+      }
     }
   }
 
-  private findPlayer(playerId: number): Player | undefined {
-    return this.gameState?.players.find((p: Player) => p.id === playerId);
+  private async handleGameStart(event: any): Promise<void> {
+    for (const [playerId, ability] of this.playerAbilities) {
+      const player = this.findPlayer(playerId);
+      if (player) {
+        const context = this.createContext(player);
+        await ability.onGameStart(context);
+      }
+    }
+  }
+
+  private async handleGameEnd(event: any): Promise<void> {
+    for (const [playerId, ability] of this.playerAbilities) {
+      const player = this.findPlayer(playerId);
+      if (player) {
+        const context = this.createContext(player);
+        await ability.onGameEnd(context);
+      }
+    }
+  }
+
+  updateCooldowns(): void {
+    for (const ability of this.abilities.values()) {
+      ability.updateCooldown();
+    }
+  }
+
+  // 디버그용 메서드
+  getPlayerAbility(playerId: number): BaseAbility | undefined {
+    return this.playerAbilities.get(playerId);
+  }
+
+  getLogs(): string[] {
+    return this.logs;
+  }
+
+  getVariables(): Map<string, any> {
+    return this.variables;
   }
 } 

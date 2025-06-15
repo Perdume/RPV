@@ -30,13 +30,54 @@ export class TurnProcessor {
     
     // AbilityManager 초기화
     this.abilityManager = new AbilityManager(this.eventSystem);
-    this.debug = new Debug('debug', 999, 'Debug ability', 0);
+    this.debug = new Debug();
+    
+    // 게임 상태 동기화
+    this.syncGameState();
     
     // 디버그 로그 추가
     this.addDebugLog('[초기화] TurnProcessor가 생성되었습니다.');
     
     // 플레이어들의 능력 할당
     this.assignPlayerAbilities();
+
+    // 이벤트 리스너 설정
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners(): void {
+    // 게임 상태 변경 시 AbilityManager 업데이트
+    this.eventSystem.on(GameEventType.TURN_START, () => {
+      this.syncGameState();
+    });
+
+    this.eventSystem.on(GameEventType.TURN_END, () => {
+      this.syncGameState();
+    });
+
+    this.eventSystem.on(GameEventType.ATTACK, () => {
+      this.syncGameState();
+    });
+
+    this.eventSystem.on(GameEventType.DEFEND, () => {
+      this.syncGameState();
+    });
+
+    this.eventSystem.on(GameEventType.EVADE, () => {
+      this.syncGameState();
+    });
+
+    this.eventSystem.on(GameEventType.DEATH, () => {
+      this.syncGameState();
+    });
+  }
+
+  private syncGameState(): void {
+    // 게임 상태를 AbilityManager에 동기화
+    this.abilityManager.setGameState({
+      players: this.gameState.players
+    });
+    this.addDebugLog('[상태 동기화] 게임 상태가 AbilityManager에 동기화되었습니다.');
   }
 
   private addDebugLog(message: string): void {
@@ -53,9 +94,18 @@ export class TurnProcessor {
 
   // 플레이어 능력 할당 메서드
   private assignPlayerAbilities(): void {
+    // 모든 플레이어에게 Debug 능력 할당
     this.gameState.players.forEach(player => {
-      if (player.ability !== '없음') {
-        this.addDebugLog(`[능력 할당] ${player.name}에게 ${player.ability} 능력을 할당합니다.`);
+      // 기존 능력이 없는 경우에만 Debug 능력 할당
+      if (!player.ability || player.ability === '없음') {
+        // Debug 능력 등록
+        this.abilityManager.assignAbility(player.id, 'debug');
+        player.ability = 'debug';
+        this.addDebugLog(`[능력 할당] ${player.name}에게 Debug 능력을 할당했습니다.`);
+      } else {
+        // 기존 능력이 있는 경우 해당 능력 등록
+        this.abilityManager.assignAbility(player.id, player.ability);
+        this.addDebugLog(`[능력 할당] ${player.name}은(는) 이미 ${player.ability} 능력을 가지고 있습니다.`);
       }
     });
   }

@@ -35,7 +35,7 @@ export class GameEngine {
     this.eventSystem = new EventSystem();
     this.abilityManager = new AbilityManager(this.eventSystem);
     this.attackCounts = new Map();
-    this.debug = new Debug('debug', 999, 'Debug ability', 0);
+    this.debug = new Debug();
     this.debugLogs = [];
 
     this.addDebugLog('[초기화] GameEngine이 생성되었습니다.');

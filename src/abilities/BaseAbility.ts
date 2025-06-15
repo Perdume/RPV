@@ -28,40 +28,26 @@ export abstract class BaseAbility implements Ability {
       .join(' ');
   }
 
+  // 기본 이벤트 핸들러들
+  async onTurnStart(context: AbilityContext): Promise<void> {}
+  async onTurnEnd(context: AbilityContext): Promise<void> {}
+  async onAttack(context: AbilityContext): Promise<void> {}
+  async onDefend(context: AbilityContext): Promise<void> {}
+  async onEvade(context: AbilityContext): Promise<void> {}
+  async onDeath(context: AbilityContext): Promise<void> {}
+  async onFocusAttack(context: AbilityContext): Promise<void> {}
+  async onAbilityUse(context: AbilityContext): Promise<void> {}
+  async onGameStart(context: AbilityContext): Promise<void> {}
+  async onGameEnd(context: AbilityContext): Promise<void> {}
+
   // 능력 사용 시 호출
   abstract use(context: AbilityContext): Promise<void>;
   
-  // 턴 시작 시 호출
-  async onTurnStart(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
-  }
-  
-  // 턴 종료 시 호출
-  async onTurnEnd(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
-  }
-  
-  // 공격 받을 때 호출
-  async onAttack(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
-  }
-  
-  // 방어할 때 호출
-  async onDefend(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
-  }
-  
-  // 회피할 때 호출
-  async onEvade(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
-  }
-
-  async onDamage(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
-  }
-
-  async onDeath(context: AbilityContext): Promise<void> {
-    // 기본 구현은 빈 메서드
+  // 쿨다운 업데이트
+  updateCooldown(): void {
+    if (this.cooldown > 0) {
+      this.cooldown--;
+    }
   }
 
   // 변수 관리 헬퍼 메서드

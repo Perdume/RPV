@@ -23,7 +23,11 @@ export enum GameEventType {
   // 상태 변경 이벤트
   HP_CHANGE = 'HP_CHANGE',
   STATUS_CHANGE = 'STATUS_CHANGE',
-  STAT_CHANGE = 'STAT_CHANGE'
+  STAT_CHANGE = 'STAT_CHANGE',
+  
+  // 게임 시작과 종료 이벤트
+  GAME_START = 'GAME_START',
+  GAME_END = 'GAME_END'
 }
 
 export interface GameEvent {
