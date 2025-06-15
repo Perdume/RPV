@@ -1,0 +1,86 @@
+{
+  "turn": 1,
+  "survivors": 5,
+  "deathZone": {
+    "stage": 1,
+    "maxHpReduction": 0,
+    "nextReduction": 15
+  },
+  "players": [
+    {
+      "name": "디버거",
+      "id": 1,
+      "hp": 5,
+      "maxHp": 5,
+      "attack": 1,
+      "defenseGauge": 3,
+      "maxDefenseGauge": 3,
+      "evadeCount": 0,
+      "ability": "디버그 로거",
+      "abilityUses": 0,
+      "status": "alive",
+      "statusEffects": [],
+      "pendingDefenseHeal": 3
+    },
+    {
+      "name": "플레이어1",
+      "id": 2,
+      "hp": 5,
+      "maxHp": 5,
+      "attack": 1,
+      "defenseGauge": 3,
+      "maxDefenseGauge": 3,
+      "evadeCount": 0,
+      "ability": "없음",
+      "abilityUses": 0,
+      "status": "alive",
+      "statusEffects": [],
+      "pendingDefenseHeal": 3
+    },
+    {
+      "name": "플레이어2",
+      "id": 3,
+      "hp": 5,
+      "maxHp": 5,
+      "attack": 1,
+      "defenseGauge": 3,
+      "maxDefenseGauge": 3,
+      "evadeCount": 0,
+      "ability": "없음",
+      "abilityUses": 0,
+      "status": "alive",
+      "statusEffects": [],
+      "pendingDefenseHeal": 3
+    },
+    {
+      "name": "플레이어3",
+      "id": 4,
+      "hp": 5,
+      "maxHp": 5,
+      "attack": 1,
+      "defenseGauge": 3,
+      "maxDefenseGauge": 3,
+      "evadeCount": 0,
+      "ability": "없음",
+      "abilityUses": 0,
+      "status": "alive",
+      "statusEffects": [],
+      "pendingDefenseHeal": 3
+    },
+    {
+      "name": "플레이어4",
+      "id": 5,
+      "hp": 5,
+      "maxHp": 5,
+      "attack": 1,
+      "defenseGauge": 3,
+      "maxDefenseGauge": 3,
+      "evadeCount": 0,
+      "ability": "없음",
+      "abilityUses": 0,
+      "status": "alive",
+      "statusEffects": [],
+      "pendingDefenseHeal": 3
+    }
+  ]
+}
