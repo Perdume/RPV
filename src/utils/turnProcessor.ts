@@ -22,6 +22,7 @@ export class TurnProcessor {
   private abilityManager: AbilityManager;
   private debug: Debug;
   private debugLogs: string[];
+  private lastTurnHpChanges: Map<number, number> = new Map(); // 턴 시작 시 체력 기록용
 
   constructor(gameState: GameState, eventSystem: EventSystem) {
     this.gameState = gameState;
@@ -49,26 +50,53 @@ export class TurnProcessor {
     // 게임 상태 변경 시 AbilityManager 업데이트
     this.eventSystem.on(GameEventType.TURN_START, () => {
       this.syncGameState();
+      this.recordHpChanges();
     });
 
     this.eventSystem.on(GameEventType.TURN_END, () => {
       this.syncGameState();
+      this.checkPerfectGuard();
     });
 
-    this.eventSystem.on(GameEventType.ATTACK, () => {
+    this.eventSystem.on(GameEventType.ATTACK_ACTION, () => {
       this.syncGameState();
     });
 
-    this.eventSystem.on(GameEventType.DEFEND, () => {
+    this.eventSystem.on(GameEventType.DEFEND_ACTION, () => {
       this.syncGameState();
     });
 
-    this.eventSystem.on(GameEventType.EVADE, () => {
+    this.eventSystem.on(GameEventType.EVADE_ACTION, () => {
       this.syncGameState();
     });
 
     this.eventSystem.on(GameEventType.DEATH, () => {
       this.syncGameState();
+    });
+  }
+
+  private recordHpChanges(): void {
+    // 턴 시작 시 모든 플레이어의 체력 기록
+    this.gameState.players.forEach(player => {
+      this.lastTurnHpChanges.set(player.id, player.hp);
+    });
+  }
+
+  private checkPerfectGuard(): void {
+    // 턴 종료 시 퍼펙트 가드 체크
+    this.gameState.players.forEach(player => {
+      const startHp = this.lastTurnHpChanges.get(player.id);
+      if (startHp !== undefined && startHp === player.hp) {
+        // 체력 변화가 없고 방어게이지가 최대가 아닌 경우
+        if (player.defenseGauge < 3) {
+          player.defenseGauge++;
+          this.eventSystem.emit({
+            type: GameEventType.PERFECT_GUARD,
+            timestamp: Date.now(),
+            data: { player: player.id }
+          });
+        }
+      }
     });
   }
 
@@ -94,20 +122,15 @@ export class TurnProcessor {
 
   // 플레이어 능력 할당 메서드
   private assignPlayerAbilities(): void {
-    // 모든 플레이어에게 Debug 능력 할당
-    this.gameState.players.forEach(player => {
-      // 기존 능력이 없는 경우에만 Debug 능력 할당
-      if (!player.ability || player.ability === '없음') {
-        // Debug 능력 등록
-        this.abilityManager.assignAbility(player.id, 'debug');
-        player.ability = 'debug';
-        this.addDebugLog(`[능력 할당] ${player.name}에게 Debug 능력을 할당했습니다.`);
-      } else {
-        // 기존 능력이 있는 경우 해당 능력 등록
-        this.abilityManager.assignAbility(player.id, player.ability);
-        this.addDebugLog(`[능력 할당] ${player.name}은(는) 이미 ${player.ability} 능력을 가지고 있습니다.`);
-      }
-    });
+    // 디버거 플레이어 찾기
+    const debuggerPlayer = this.gameState.players.find(p => p.name === '디버거');
+    
+    if (debuggerPlayer) {
+      // 디버거 플레이어에게만 Debug 능력 할당
+      this.abilityManager.assignAbility(debuggerPlayer.id, 'debug');
+      debuggerPlayer.ability = 'debug';
+      this.addDebugLog(`[능력 할당] ${debuggerPlayer.name}에게 Debug 능력을 할당했습니다.`);
+    }
   }
 
   public async processTurn(actions: PlayerAction[]): Promise<TurnResult> {
@@ -203,122 +226,111 @@ export class TurnProcessor {
   }
 
   private async processAttack(attacker: Player, target: Player, logs: string[]): Promise<void> {
-    // 디버그 로그 추가
-    this.addDebugLog(`[공격] ${attacker.name}이(가) ${target.name}을(를) 공격합니다.`);
+    // 공격 행동 이벤트 발생
+    await this.eventSystem.emit({
+      type: GameEventType.ATTACK_ACTION,
+      timestamp: Date.now(),
+      data: { attacker: attacker.id, target: target.id }
+    });
 
-    // 방어 게이지 체크
+    // 회피 판정
+    const evadeChance = 5 * (this.gameState.players.filter(p => p.status !== PlayerStatus.DEAD).length - target.evadeCount * 2);
+    const isEvadeSuccess = Math.random() * 100 < evadeChance;
+
+    if (isEvadeSuccess) {
+      // 회피 성공
+      await this.eventSystem.emit({
+        type: GameEventType.EVADE_SUCCESS,
+        timestamp: Date.now(),
+        data: { player: target.id, attacker: attacker.id }
+      });
+      logs.push(`${target.name}이(가) 회피에 성공했습니다!`);
+      return;
+    }
+
+    // 회피 실패
+    await this.eventSystem.emit({
+      type: GameEventType.EVADE_FAIL,
+      timestamp: Date.now(),
+      data: { player: target.id, attacker: attacker.id }
+    });
+
+    // 방어게이지 체크
     if (target.defenseGauge > 0) {
       target.defenseGauge--;
-      target.wasAttacked = true;
-      logs.push(`[방어] ${target.name}의 방어 게이지가 1 감소했습니다. (남은 방어 게이지: ${target.defenseGauge})`);
-      
       await this.eventSystem.emit({
-        type: GameEventType.DEFEND,
+        type: GameEventType.DEFENSE_CONSUMED,
         timestamp: Date.now(),
-        data: {
-          player: target.id,
-          defenseGauge: target.defenseGauge,
-          damageReduction: target.damageReduction,
-          players: this.gameState.players
-        }
+        data: { player: target.id, attacker: attacker.id }
       });
+      logs.push(`${target.name}의 방어게이지가 소모되었습니다. (남은 방어게이지: ${target.defenseGauge})`);
       return;
     }
 
-    // 회피 시도
-    const evadeChance = this.calculateEvadeChance(target);
-    if (Math.random() < evadeChance) {
-      target.evadeCount++;
-      target.wasAttacked = true;
-      logs.push(`[회피] ${target.name}이(가) 공격을 회피했습니다! (회피 횟수: ${target.evadeCount})`);
-      
-      await this.eventSystem.emit({
-        type: GameEventType.EVADE,
-        timestamp: Date.now(),
-        data: {
-          player: target.id,
-          attacker: attacker.id,
-          success: true,
-          chance: evadeChance,
-          players: this.gameState.players
-        }
-      });
-      return;
-    }
+    // 데미지 적용
+    target.hp--;
+    await this.eventSystem.emit({
+      type: GameEventType.DAMAGE_DEALT,
+      timestamp: Date.now(),
+      data: { attacker: attacker.id, target: target.id, damage: 1 }
+    });
+    logs.push(`${attacker.name}이(가) ${target.name}에게 1의 데미지를 입혔습니다.`);
 
-    // 데미지 계산 및 적용
-    const damage = this.calculateDamage(attacker, target);
-    if (damage > 0) {
-      target.hp -= damage;
-      target.wasAttacked = true;
-      logs.push(`[공격] ${attacker.name}이(가) ${target.name}에게 ${damage}의 데미지를 입혔습니다. (남은 체력: ${target.hp})`);
-      
+    // 사망 체크
+    if (target.hp <= 0) {
+      target.status = PlayerStatus.DEAD;
       await this.eventSystem.emit({
-        type: GameEventType.ATTACK,
+        type: GameEventType.DEATH,
         timestamp: Date.now(),
-        data: {
-          attacker: attacker.id,
-          target: target.id,
-          damage,
-          targetHp: target.hp,
-          players: this.gameState.players
-        }
+        data: { player: target.id, killer: attacker.id }
       });
-
-      // 사망 체크
-      if (target.hp <= 0) {
-        target.status = PlayerStatus.DEAD;
-        await this.eventSystem.emit({
-          type: GameEventType.DEATH,
-          timestamp: Date.now(),
-          data: {
-            player: target.id,
-            killer: attacker.id,
-            lastDamage: damage,
-            players: this.gameState.players
-          }
-        });
-        logs.push(`[사망] ${target.name}이(가) 탈락했습니다.`);
-      }
+      logs.push(`${target.name}이(가) 탈락했습니다.`);
     }
   }
 
   private async processDefend(player: Player, logs: string[]): Promise<void> {
-    // 디버그 로그 추가
-    this.addDebugLog(`[방어] ${player.name}이(가) 방어를 시도합니다.`);
-
-    player.defenseGauge = Math.min(player.defenseGauge + 1, player.maxDefenseGauge);
-    logs.push(`[방어] ${player.name}의 방어 게이지가 1 증가했습니다. (현재 방어 게이지: ${player.defenseGauge})`);
-    
+    // 방어 행동 이벤트 발생
     await this.eventSystem.emit({
-      type: GameEventType.DEFEND,
+      type: GameEventType.DEFEND_ACTION,
       timestamp: Date.now(),
-      data: {
-        player: player.id,
-        defenseGauge: player.defenseGauge,
-        damageReduction: player.damageReduction,
-        players: this.gameState.players
-      }
+      data: { player: player.id }
     });
+
+    if (player.defenseGauge < 3) {
+      player.defenseGauge++;
+      logs.push(`${player.name}의 방어게이지가 증가했습니다. (현재 방어게이지: ${player.defenseGauge})`);
+    } else {
+      logs.push(`${player.name}의 방어게이지가 이미 최대입니다.`);
+    }
   }
 
   private async processEvade(player: Player, logs: string[]): Promise<void> {
-    // 디버그 로그 추가
-    this.addDebugLog(`[회피] ${player.name}이(가) 회피를 시도합니다.`);
+    // 회피 행동 이벤트 발생
+    await this.eventSystem.emit({
+      type: GameEventType.EVADE_ACTION,
+      timestamp: Date.now(),
+      data: { player: player.id }
+    });
 
     player.evadeCount++;
-    logs.push(`[회피] ${player.name}의 회피 카운트가 1 증가했습니다. (현재 회피 카운트: ${player.evadeCount})`);
-    
+    logs.push(`${player.name}의 회피카운트가 증가했습니다. (현재 회피카운트: ${player.evadeCount})`);
+  }
+
+  private async processPass(player: Player, logs: string[]): Promise<void> {
+    // 패스 행동 이벤트 발생
     await this.eventSystem.emit({
-      type: GameEventType.EVADE,
+      type: GameEventType.PASS_ACTION,
       timestamp: Date.now(),
-      data: {
-        player: player.id,
-        success: true,
-        chance: 1,
-        players: this.gameState.players
-      }
+      data: { player: player.id }
     });
+
+    // 회피카운트 감소
+    if (player.evadeCount > 0) {
+      player.evadeCount--;
+      logs.push(`${player.name}의 회피카운트가 감소했습니다. (현재 회피카운트: ${player.evadeCount})`);
+    }
+
+    logs.push(`${player.name}이(가) 행동을 패스했습니다.`);
   }
 
   private async processAbility(player: Player, target: Player, abilityId: string | undefined, logs: string[]): Promise<void> {

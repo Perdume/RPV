@@ -69,7 +69,7 @@ export class EventSystem {
   // Helper methods for common events
   emitAttack(data: AttackEvent): Promise<void> {
     return this.emit({
-      type: GameEventType.ATTACK,
+      type: GameEventType.ATTACK_ACTION,
       timestamp: Date.now(),
       data
     });
@@ -77,7 +77,7 @@ export class EventSystem {
 
   emitDefend(data: DefendEvent): Promise<void> {
     return this.emit({
-      type: GameEventType.DEFEND,
+      type: GameEventType.DEFEND_ACTION,
       timestamp: Date.now(),
       data
     });
@@ -85,7 +85,7 @@ export class EventSystem {
 
   emitEvade(data: EvadeEvent): Promise<void> {
     return this.emit({
-      type: GameEventType.EVADE,
+      type: GameEventType.EVADE_ACTION,
       timestamp: Date.now(),
       data
     });

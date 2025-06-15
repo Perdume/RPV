@@ -1,33 +1,39 @@
 import { PlayerId, DamageEvent } from './types/game.types';
 
 export enum GameEventType {
-  // 기본 이벤트
-  ATTACK = 'ATTACK',
-  DEFEND = 'DEFEND',
-  EVADE = 'EVADE',
-  DEATH = 'DEATH',
+  // 시스템 이벤트
+  GAME_START = 'GAME_START',
+  GAME_END = 'GAME_END',
   TURN_START = 'TURN_START',
   TURN_END = 'TURN_END',
-  DAMAGE = 'DAMAGE',
+  PERFECT_GUARD = 'PERFECT_GUARD',
+
+  // 행동 이벤트 (플레이어가 의도적으로 한 행동)
+  ATTACK_ACTION = 'ATTACK_ACTION',
+  DEFEND_ACTION = 'DEFEND_ACTION',
+  EVADE_ACTION = 'EVADE_ACTION',
+  PASS_ACTION = 'PASS_ACTION',
+  ABILITY_USE = 'ABILITY_USE',
+
+  // 결과 이벤트 (행동의 결과로 발생)
+  DAMAGE_DEALT = 'DAMAGE_DEALT',
+  DEFENSE_CONSUMED = 'DEFENSE_CONSUMED',
+  EVADE_SUCCESS = 'EVADE_SUCCESS',
+  EVADE_FAIL = 'EVADE_FAIL',
+  DEATH = 'DEATH',
+  FOCUS_ATTACK = 'FOCUS_ATTACK',
   
   // 특수 이벤트
-  FOCUS_ATTACK = 'FOCUS_ATTACK',
-  PERFECT_GUARD = 'PERFECT_GUARD',
   DEATH_ZONE = 'DEATH_ZONE',
   
   // 능력 관련 이벤트
-  ABILITY_USE = 'ABILITY_USE',
   ABILITY_TRIGGER = 'ABILITY_TRIGGER',
   ABILITY_EFFECT = 'ABILITY_EFFECT',
   
   // 상태 변경 이벤트
   HP_CHANGE = 'HP_CHANGE',
   STATUS_CHANGE = 'STATUS_CHANGE',
-  STAT_CHANGE = 'STAT_CHANGE',
-  
-  // 게임 시작과 종료 이벤트
-  GAME_START = 'GAME_START',
-  GAME_END = 'GAME_END'
+  STAT_CHANGE = 'STAT_CHANGE'
 }
 
 export interface GameEvent {

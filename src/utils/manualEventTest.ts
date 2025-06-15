@@ -190,7 +190,7 @@ window.testCombat = async function() {
   let eventCount = 0;
 
   // 모든 전투 이벤트 모니터링
-  [GameEventType.ATTACK, GameEventType.DEFEND, GameEventType.EVADE, GameEventType.DEATH].forEach(eventType => {
+  [GameEventType.ATTACK_ACTION, GameEventType.DEFEND_ACTION, GameEventType.EVADE_ACTION, GameEventType.DEATH].forEach(eventType => {
     eventSystem.on(eventType, (event) => {
       eventCount++;
       console.log(`⚡ [${eventCount}] ${eventType}:`, event.data);

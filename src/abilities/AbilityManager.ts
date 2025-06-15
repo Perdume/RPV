@@ -28,9 +28,9 @@ export class AbilityManager {
   private setupEventListeners(): void {
     this.eventSystem.on(GameEventType.TURN_START, this.handleTurnStart.bind(this));
     this.eventSystem.on(GameEventType.TURN_END, this.handleTurnEnd.bind(this));
-    this.eventSystem.on(GameEventType.ATTACK, this.handleAttack.bind(this));
-    this.eventSystem.on(GameEventType.DEFEND, this.handleDefend.bind(this));
-    this.eventSystem.on(GameEventType.EVADE, this.handleEvade.bind(this));
+    this.eventSystem.on(GameEventType.ATTACK_ACTION, this.handleAttack.bind(this));
+    this.eventSystem.on(GameEventType.DEFEND_ACTION, this.handleDefend.bind(this));
+    this.eventSystem.on(GameEventType.EVADE_ACTION, this.handleEvade.bind(this));
     this.eventSystem.on(GameEventType.DEATH, this.handleDeath.bind(this));
     this.eventSystem.on(GameEventType.FOCUS_ATTACK, this.handleFocusAttack.bind(this));
     this.eventSystem.on(GameEventType.ABILITY_USE, this.handleAbilityUse.bind(this));
