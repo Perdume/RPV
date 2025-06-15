@@ -7,6 +7,7 @@ export abstract class BaseAbility implements Ability {
   description: string;
   maxUses: number;
   cooldown: number;
+  maxCooldown: number;
 
   constructor(
     id: string,
@@ -19,6 +20,7 @@ export abstract class BaseAbility implements Ability {
     this.description = description;
     this.maxUses = maxUses;
     this.cooldown = cooldown;
+    this.maxCooldown = cooldown;
   }
 
   protected formatName(id: string): string {
@@ -40,6 +42,21 @@ export abstract class BaseAbility implements Ability {
   async onGameStart(context: AbilityContext): Promise<void> {}
   async onGameEnd(context: AbilityContext): Promise<void> {}
 
+  // 시스템 이벤트 핸들러
+  async onPerfectGuard(context: AbilityContext): Promise<void> {}
+
+  // 행동 이벤트 핸들러
+  async onAttackAction(context: AbilityContext): Promise<void> {}
+  async onDefendAction(context: AbilityContext): Promise<void> {}
+  async onEvadeAction(context: AbilityContext): Promise<void> {}
+  async onPassAction(context: AbilityContext): Promise<void> {}
+
+  // 결과 이벤트 핸들러
+  async onDamageDealt(context: AbilityContext): Promise<void> {}
+  async onDefenseConsumed(context: AbilityContext): Promise<void> {}
+  async onEvadeSuccess(context: AbilityContext): Promise<void> {}
+  async onEvadeFail(context: AbilityContext): Promise<void> {}
+
   // 능력 사용 시 호출
   abstract use(context: AbilityContext): Promise<void>;
   
@@ -48,6 +65,18 @@ export abstract class BaseAbility implements Ability {
     if (this.cooldown > 0) {
       this.cooldown--;
     }
+  }
+
+  resetCooldown(): void {
+    this.cooldown = this.maxCooldown;
+  }
+
+  isOnCooldown(): boolean {
+    return this.cooldown > 0;
+  }
+
+  getRemainingCooldown(): number {
+    return this.cooldown;
   }
 
   // 변수 관리 헬퍼 메서드
