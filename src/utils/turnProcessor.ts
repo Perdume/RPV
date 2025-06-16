@@ -183,12 +183,7 @@ export class TurnProcessor {
     const sessionData: GameSessionData = {
       players: this.gameState.players,
       currentTurn: this.gameState.currentTurn,
-      logs: this.gameState.logs,
-      isDeathZone: this.gameState.isDeathZone,
-      turn: this.gameState.turn,
-      survivors: this.gameState.survivors,
-      deathZone: this.gameState.deathZone,
-      currentSession: this.gameState.currentSession
+      lastUpdated: new Date().toISOString()
     };
     await DataManager.saveGameSession(sessionData);
     

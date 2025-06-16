@@ -169,12 +169,7 @@ export interface AbilityContext {
 export interface GameSessionData {
   players: Player[];
   currentTurn: number;
-  logs: string[];
-  isDeathZone: boolean;
-  turn: number;
-  survivors: Player[];
-  deathZone: boolean;
-  currentSession: string;
+  lastUpdated: string;
 }
 
 export interface AbilityData {
@@ -185,8 +180,8 @@ export interface AbilityData {
 }
 
 export interface GameSnapshot {
-  gameState: GameState;
-  abilityStates: Record<string, AbilityData>;
+  gameState: GameSessionData;
+  abilityStates: Record<string, any>;
   metadata: {
     timestamp: number;
     turnNumber: number;

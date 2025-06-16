@@ -1,18 +1,36 @@
 import { PlayerRecord, GameRecord, AbilityRecord } from '../types/records.types';
 import { GameSessionData, AbilityData, GameSnapshot } from '../types/game.types';
+import { initFileSystem } from './fsInit';
 
 interface FileSystemError extends Error {
   code?: string;
 }
 
 export class DataManager {
+  private static ensureFsInitialized() {
+    if (!window.fs) {
+      initFileSystem();
+    }
+  }
+
   // 게임 세션 데이터 로드
   static async loadGameSession(): Promise<GameSessionData> {
+    this.ensureFsInitialized();
     try {
-      const content = await window.fs.readFile('Data/data.json', { encoding: 'utf8' });
+      const content = await window.fs!.readFile('Data/data.json', { encoding: 'utf8' });
       return JSON.parse(content);
     } catch (error) {
       const fsError = error as FileSystemError;
+      if (fsError.code === 'ENOENT') {
+        // 파일이 없는 경우 기본 데이터 생성
+        const defaultData: GameSessionData = {
+          players: [],
+          currentTurn: 0,
+          lastUpdated: new Date().toISOString()
+        };
+        await this.saveGameSession(defaultData);
+        return defaultData;
+      }
       console.error('게임 세션 로드 실패:', fsError.message);
       throw fsError;
     }
@@ -20,9 +38,10 @@ export class DataManager {
 
   // 게임 세션 데이터 저장
   static async saveGameSession(data: GameSessionData): Promise<void> {
+    this.ensureFsInitialized();
     try {
       const content = JSON.stringify(data, null, 2);
-      await window.fs.writeFile('Data/data.json', content, { encoding: 'utf8' });
+      await window.fs!.writeFile('Data/data.json', content, { encoding: 'utf8' });
     } catch (error) {
       const fsError = error as FileSystemError;
       console.error('게임 세션 저장 실패:', fsError.message);
@@ -160,11 +179,12 @@ export class DataManager {
 
   // 게임 스냅샷 저장
   static async saveGameSnapshot(snapshot: GameSnapshot): Promise<void> {
+    this.ensureFsInitialized();
     try {
       const turnNumber = snapshot.metadata.turnNumber;
       const dir = `src/data/history/Turn_${turnNumber}`;
       const content = JSON.stringify(snapshot, null, 2);
-      await window.fs.writeFile(`${dir}/data.json`, content, { encoding: 'utf8' });
+      await window.fs!.writeFile(`${dir}/data.json`, content, { encoding: 'utf8' });
     } catch (error) {
       const fsError = error as FileSystemError;
       console.error('게임 스냅샷 저장 실패:', fsError.message);
@@ -212,14 +232,17 @@ export class DataManager {
 
   // 능력 데이터 로드
   static async loadAbilityData(playerId: number, abilityId: string): Promise<any> {
+    this.ensureFsInitialized();
     try {
-      const content = await window.fs.readFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, { encoding: 'utf8' });
+      const content = await window.fs!.readFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, { encoding: 'utf8' });
       return JSON.parse(content);
     } catch (error) {
       const fsError = error as FileSystemError;
       if (fsError.code === 'ENOENT') {
-        // 파일이 없는 경우 빈 데이터 반환
-        return { variables: {} };
+        // 파일이 없는 경우 기본 데이터 생성
+        const defaultData = { variables: {} };
+        await this.saveAbilityData(playerId, abilityId, defaultData);
+        return defaultData;
       }
       console.error('능력 데이터 로드 실패:', fsError.message);
       throw fsError;
@@ -228,9 +251,10 @@ export class DataManager {
 
   // 능력 데이터 저장
   static async saveAbilityData(playerId: number, abilityId: string, data: any): Promise<void> {
+    this.ensureFsInitialized();
     try {
       const content = JSON.stringify(data, null, 2);
-      await window.fs.writeFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, content, { encoding: 'utf8' });
+      await window.fs!.writeFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, content, { encoding: 'utf8' });
     } catch (error) {
       const fsError = error as FileSystemError;
       console.error('능력 데이터 저장 실패:', fsError.message);

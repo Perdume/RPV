@@ -1,4 +1,4 @@
-import { GameState, GameSnapshot, AbilityData } from '../types/game.types';
+import { GameState, GameSnapshot, AbilityData, GameSessionData } from '../types/game.types';
 import { AbilityManager } from '../abilities/AbilityManager';
 import { DataManager } from './DataManager';
 
@@ -8,8 +8,14 @@ export class HistoryManager {
 
   // 스냅샷 생성
   async createSnapshot(gameState: GameState, abilityManager: AbilityManager): Promise<void> {
+    const sessionData: GameSessionData = {
+      players: gameState.players,
+      currentTurn: gameState.currentTurn,
+      lastUpdated: new Date().toISOString()
+    };
+
     const snapshot: GameSnapshot = {
-      gameState: this.cloneGameState(gameState),
+      gameState: sessionData,
       abilityStates: await this.captureAbilityStates(abilityManager),
       metadata: {
         timestamp: Date.now(),
@@ -53,8 +59,12 @@ export class HistoryManager {
   }
 
   // 게임 상태 복제
-  private cloneGameState(gameState: GameState): GameState {
-    return JSON.parse(JSON.stringify(gameState));
+  private cloneGameState(gameState: GameState): GameSessionData {
+    return {
+      players: JSON.parse(JSON.stringify(gameState.players)),
+      currentTurn: gameState.currentTurn,
+      lastUpdated: new Date().toISOString()
+    };
   }
 
   // 능력 상태 캡처

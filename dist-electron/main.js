@@ -1,7 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('fs/promises');
+const path = require('path');
 
 // ES 모듈에서 __dirname과 __filename 사용을 위한 설정
 const __filename = fileURLToPath(import.meta.url);
@@ -15,8 +14,9 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -67,6 +67,16 @@ ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
     await fs.writeFile(absolutePath, data, 'utf8');
   } catch (error) {
     console.error(`파일 쓰기 실패 (${filePath}):`, error);
+    throw error;
+  }
+});
+
+ipcMain.handle('fs:ensureDirectory', async (event, dirPath) => {
+  try {
+    const absolutePath = path.resolve(app.getAppPath(), dirPath);
+    await fs.mkdir(absolutePath, { recursive: true });
+  } catch (error) {
+    console.error(`디렉토리 생성 실패 (${dirPath}):`, error);
     throw error;
   }
 }); 
