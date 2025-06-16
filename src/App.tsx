@@ -74,7 +74,7 @@ const App: React.FC = () => {
   const [isDeathZone, setIsDeathZone] = useState(false);
   const [eventSystem] = useState(() => new EventSystem());
   const [abilityManager] = useState(() => new AbilityManager(eventSystem));
-  const { runEventTest, runDebugTest, runCombatTest } = useEventTesting();
+  const { runEventTest, runRollbackTest, runRedoTest } = useEventTesting();
 
   useEffect(() => {
     const loadGameData = async () => {
@@ -215,7 +215,21 @@ const App: React.FC = () => {
           🧪 이벤트 테스트
         </button>
         <button 
-          onClick={runDebugTest}
+          onClick={runRollbackTest}
+          style={{
+            padding: '8px 16px',
+            margin: '4px',
+            backgroundColor: '#FFC107',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          ⏪ 롤백 테스트
+        </button>
+        <button 
+          onClick={runRedoTest}
           style={{
             padding: '8px 16px',
             margin: '4px',
@@ -226,21 +240,7 @@ const App: React.FC = () => {
             cursor: 'pointer'
           }}
         >
-          🐛 디버그 테스트
-        </button>
-        <button 
-          onClick={runCombatTest}
-          style={{
-            padding: '8px 16px',
-            margin: '4px',
-            backgroundColor: '#f44336',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          ⚔️ 전투 테스트
+          ⏩ 다시실행 테스트
         </button>
       </div>
     </>

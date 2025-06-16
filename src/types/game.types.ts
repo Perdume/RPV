@@ -159,6 +159,7 @@ export interface Ability {
 }
 
 export interface AbilityContext {
+  event: ModifiableEvent;
   player: Player;
   target?: Player;
   players: Player[];
@@ -166,4 +167,20 @@ export interface AbilityContext {
   variables: Map<string, any>;
   currentTurn: number;
   logs: string[];
+  ability: Ability;
+}
+
+export interface GameSessionData {
+  turn: number;
+  survivors: number;
+  deathZone: {
+    stage: number;
+    maxHpReduction: number;
+    nextReduction: number;
+  };
+  players: Player[];
+  currentSession: {
+    startTime: string;
+    gameId: string;
+  };
 } 

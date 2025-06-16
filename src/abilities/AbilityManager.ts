@@ -11,6 +11,7 @@ export class AbilityManager {
   private logs: string[] = [];
   private variables: Map<string, any> = new Map();
   private currentTurn: number = 0;
+  private players: Map<number, Player> = new Map();
 
   constructor(eventSystem: EventSystem) {
     this.eventSystem = eventSystem;
@@ -76,13 +77,15 @@ export class AbilityManager {
 
   private createContext(player: Player, target?: Player): AbilityContext {
     return {
+      event: {} as ModifiableEvent, // 임시 이벤트 객체
       player,
       target,
       players: this.gameState?.players || [],
       eventSystem: this.eventSystem,
       variables: this.variables,
       currentTurn: this.currentTurn,
-      logs: this.logs
+      logs: this.logs,
+      ability: this.playerAbilities.get(player.id) || {} as Ability
     };
   }
 
@@ -261,5 +264,30 @@ export class AbilityManager {
 
   getAllAbilities(): Ability[] {
     return Array.from(this.abilities.values());
+  }
+
+  // 플레이어 가져오기
+  getPlayer(playerId: number): Player | null {
+    return this.players.get(playerId) || null;
+  }
+
+  // 모든 플레이어 가져오기
+  getAllPlayers(): Player[] {
+    return Array.from(this.players.values());
+  }
+
+  // EventSystem 가져오기
+  getEventSystem(): EventSystem {
+    return this.eventSystem;
+  }
+
+  // 현재 턴 가져오기
+  getCurrentTurn(): number {
+    return this.currentTurn;
+  }
+
+  // 플레이어 설정
+  setPlayer(player: Player): void {
+    this.players.set(player.id, player);
   }
 } 

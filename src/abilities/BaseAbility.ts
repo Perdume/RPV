@@ -1,4 +1,5 @@
 import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext } from '../types/game.types';
+import { AbilityManager } from './AbilityManager';
 
 export abstract class BaseAbility implements Ability {
   id: string;
@@ -7,12 +8,37 @@ export abstract class BaseAbility implements Ability {
   isActive: boolean = true;
   cooldown: number = 0;
   maxCooldown: number;
+  maxUses: number;
+  ownerId: number | null = null;
+  abilityManager: AbilityManager | null = null;
 
-  constructor(id: string, name: string, description: string, maxCooldown: number = 0) {
+  constructor(id: string, name: string, description: string, maxCooldown: number = 0, maxUses: number) {
     this.id = id;
     this.name = name;
     this.description = description;
     this.maxCooldown = maxCooldown;
+    this.maxUses = maxUses;
+  }
+
+  // 능력 주인 ID 설정
+  setOwner(playerId: number): void {
+    this.ownerId = playerId;
+  }
+
+  // 능력 주인 ID 가져오기
+  getOwner(): number | null {
+    return this.ownerId;
+  }
+
+  // 능력 주인 플레이어 객체 가져오기
+  getOwnerPlayer(): Player | null {
+    if (!this.ownerId || !this.abilityManager) return null;
+    return this.abilityManager.getPlayer(this.ownerId);
+  }
+
+  // AbilityManager 설정
+  setAbilityManager(manager: AbilityManager): void {
+    this.abilityManager = manager;
   }
 
   // Pre/Post 이벤트 핸들러
@@ -82,5 +108,22 @@ export abstract class BaseAbility implements Ability {
     
     if (availablePlayers.length === 0) return null;
     return availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
+  }
+
+  // 컨텍스트 생성
+  protected createContext(event: ModifiableEvent): AbilityContext {
+    if (!this.abilityManager) {
+      throw new Error('AbilityManager not set');
+    }
+    return {
+      event,
+      player: this.getOwnerPlayer()!,
+      players: this.abilityManager.getAllPlayers(),
+      eventSystem: this.abilityManager.getEventSystem(),
+      variables: this.abilityManager.getVariables(),
+      currentTurn: this.abilityManager.getCurrentTurn(),
+      logs: this.abilityManager.getLogs(),
+      ability: this
+    };
   }
 } 

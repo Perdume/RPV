@@ -3,7 +3,7 @@ import { ModifiableEvent } from '../types/game.types';
 
 export class DebugLogger extends BaseAbility {
   constructor() {
-    super('debug_logger', 'Debug Logger', '디버그 로그를 출력합니다.', 0);
+    super('debug_logger', 'Debug Logger', '디버그 로그를 출력합니다.', 0, 0);
   }
 
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {

@@ -10,8 +10,8 @@ import { PlayerStatus } from '../types/game.types';
 declare global {
   interface Window {
     testEvents: () => void;
-    testDebugLogger: () => void;
-    testCombat: () => void;
+    testRollback: () => void;
+    testRedo: () => void;
   }
 }
 
@@ -119,72 +119,8 @@ window.testEvents = async function() {
   return { capturedEvents, result };
 };
 
-window.testDebugLogger = async function() {
-  console.log('🐛 디버그 로거 테스트 시작');
-  
-  const eventSystem = new EventSystem();
-  
-  // TURN_START 이벤트 리스너만 등록
-  eventSystem.on(GameEventType.TURN_START, async (event: ModifiableEvent) => {
-    console.log('🎯 TURN_START 이벤트 감지!', event.data);
-  });
-
-  const gameState = {
-    players: [
-      {
-        id: 1,
-        name: '디버거',
-        hp: 5,
-        maxHp: 5,
-        defenseGauge: 3,
-        maxDefenseGauge: 3,
-        evadeCount: 0,
-        abilityId: 'debug_logger',
-        status: PlayerStatus.ALIVE,
-        ability: '디버그 로거',
-        abilityUses: 1,
-        maxAbilityUses: 1,
-        statusEffects: [],
-        isPerfectGuard: false,
-        defense: 3,
-        maxDefense: 3,
-        evasion: 0,
-        attack: 1,
-        pendingDefenseHeal: 0,
-        hasDefended: false,
-        wasAttacked: false,
-        isAbilitySealed: false,
-        isDefenseSealed: false,
-        damageReduction: 0,
-        isGhost: false,
-        currentTurn: 1,
-        noDamageTurns: 0,
-        inactiveTurns: 0
-      }
-    ],
-    currentTurn: 1,
-    logs: [],
-    isDeathZone: false
-  };
-
-  const turnProcessor = new TurnProcessor(gameState, eventSystem);
-  
-  // 디버그 로거가 능력 사용
-  const actions = [
-    { playerId: 1, targetId: 1, actionType: 'ABILITY' as const, abilityId: 'debug_logger' }
-  ];
-
-  console.log('🎮 디버그 로거 능력 사용');
-  const result = await turnProcessor.processTurn(actions);
-  
-  console.log('📋 결과 로그:');
-  result.logs.forEach(log => console.log('📝', log));
-  
-  return result;
-};
-
-window.testCombat = async function() {
-  console.log('⚔️ 전투 시스템 테스트 시작');
+window.testRollback = async function() {
+  console.log('⏪ 롤백 테스트 시작');
   
   const eventSystem = new EventSystem();
   let eventCount = 0;
@@ -232,9 +168,9 @@ window.testCombat = async function() {
       {
         id: 2,
         name: '방어자',
-        hp: 1, // 체력을 1로 설정해서 죽게 만들기
+        hp: 1,
         maxHp: 5,
-        defenseGauge: 0, // 방어게이지 없음
+        defenseGauge: 0,
         maxDefenseGauge: 3,
         evadeCount: 0,
         abilityId: 'none',
@@ -267,20 +203,147 @@ window.testCombat = async function() {
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);
   
-  // 공격자가 방어자를 공격 (방어자는 방어게이지 없고 체력 1이라 죽음)
-  const actions = [
-    { playerId: 1, targetId: 2, actionType: 'ATTACK' as const },
-    { playerId: 2, targetId: 2, actionType: 'PASS' as const }
+  // 첫 번째 턴 실행
+  console.log('🎮 첫 번째 턴 실행');
+  const actions1 = [
+    { playerId: 1, targetId: 2, actionType: 'ATTACK' as const }
   ];
+  await turnProcessor.processTurn(actions1);
 
-  console.log('💥 치명적 공격 실행');
-  const result = await turnProcessor.processTurn(actions);
+  // 두 번째 턴 실행
+  console.log('🎮 두 번째 턴 실행');
+  const actions2 = [
+    { playerId: 1, targetId: 2, actionType: 'ATTACK' as const }
+  ];
+  await turnProcessor.processTurn(actions2);
+
+  // 롤백 실행
+  console.log('⏪ 롤백 실행');
+  const snapshot = eventSystem.rollback(1);
+  if (snapshot) {
+    console.log('📊 롤백 결과:');
+    console.log('- 턴 번호:', snapshot.metadata.turnNumber);
+    console.log('- 이벤트 수:', snapshot.eventHistory.length);
+    console.log('- 플레이어 상태:', snapshot.gameState.players.map(p => ({
+      name: p.name,
+      hp: p.hp,
+      status: p.status
+    })));
+  }
+
+  return snapshot;
+};
+
+window.testRedo = async function() {
+  console.log('⏩ 다시실행 테스트 시작');
   
-  console.log(`📊 총 ${eventCount}개의 이벤트 발생`);
-  console.log('📋 결과 로그:');
-  result.logs.forEach(log => console.log('📝', log));
+  const eventSystem = new EventSystem();
+  let eventCount = 0;
+
+  // 모든 전투 이벤트 모니터링
+  [GameEventType.ATTACK_ACTION, GameEventType.DEFEND_ACTION, GameEventType.EVADE_ACTION, GameEventType.DEATH].forEach(eventType => {
+    eventSystem.on(eventType, async (event: ModifiableEvent) => {
+      eventCount++;
+      console.log(`⚡ [${eventCount}] ${eventType}:`, event.data);
+    });
+  });
+
+  const gameState = {
+    players: [
+      {
+        id: 1,
+        name: '공격자',
+        hp: 5,
+        maxHp: 5,
+        defenseGauge: 3,
+        maxDefenseGauge: 3,
+        evadeCount: 0,
+        abilityId: 'none',
+        status: PlayerStatus.ALIVE,
+        ability: '없음',
+        abilityUses: 0,
+        maxAbilityUses: 0,
+        statusEffects: [],
+        isPerfectGuard: false,
+        defense: 3,
+        maxDefense: 3,
+        evasion: 0,
+        attack: 1,
+        pendingDefenseHeal: 0,
+        hasDefended: false,
+        wasAttacked: false,
+        isAbilitySealed: false,
+        isDefenseSealed: false,
+        damageReduction: 0,
+        isGhost: false,
+        currentTurn: 1,
+        noDamageTurns: 0,
+        inactiveTurns: 0
+      },
+      {
+        id: 2,
+        name: '방어자',
+        hp: 1,
+        maxHp: 5,
+        defenseGauge: 0,
+        maxDefenseGauge: 3,
+        evadeCount: 0,
+        abilityId: 'none',
+        status: PlayerStatus.ALIVE,
+        ability: '없음',
+        abilityUses: 0,
+        maxAbilityUses: 0,
+        statusEffects: [],
+        isPerfectGuard: false,
+        defense: 3,
+        maxDefense: 3,
+        evasion: 0,
+        attack: 1,
+        pendingDefenseHeal: 0,
+        hasDefended: false,
+        wasAttacked: false,
+        isAbilitySealed: false,
+        isDefenseSealed: false,
+        damageReduction: 0,
+        isGhost: false,
+        currentTurn: 1,
+        noDamageTurns: 0,
+        inactiveTurns: 0
+      }
+    ],
+    currentTurn: 1,
+    logs: [],
+    isDeathZone: false
+  };
+
+  const turnProcessor = new TurnProcessor(gameState, eventSystem);
   
-  return result;
+  // 첫 번째 턴 실행
+  console.log('🎮 첫 번째 턴 실행');
+  const actions1 = [
+    { playerId: 1, targetId: 2, actionType: 'ATTACK' as const }
+  ];
+  await turnProcessor.processTurn(actions1);
+
+  // 롤백 실행
+  console.log('⏪ 롤백 실행');
+  eventSystem.rollback(1);
+
+  // 다시실행 실행
+  console.log('⏩ 다시실행 실행');
+  const snapshot = eventSystem.redo(1);
+  if (snapshot) {
+    console.log('📊 다시실행 결과:');
+    console.log('- 턴 번호:', snapshot.metadata.turnNumber);
+    console.log('- 이벤트 수:', snapshot.eventHistory.length);
+    console.log('- 플레이어 상태:', snapshot.gameState.players.map(p => ({
+      name: p.name,
+      hp: p.hp,
+      status: p.status
+    })));
+  }
+
+  return snapshot;
 };
 
 // 사용 방법 안내
@@ -289,8 +352,8 @@ console.log(`
 
 사용법:
 1. window.testEvents() - 전체 이벤트 시스템 테스트
-2. window.testDebugLogger() - 디버그 로거 능력 테스트  
-3. window.testCombat() - 전투 시스템 이벤트 테스트
+2. window.testRollback() - 롤백 기능 테스트
+3. window.testRedo() - 다시실행 기능 테스트
 
 브라우저 콘솔에서 위 함수들을 실행해보세요!
 `);
@@ -303,17 +366,17 @@ export function useEventTesting() {
     }
   };
 
-  const runDebugTest = () => {
-    if (typeof window !== 'undefined' && window.testDebugLogger) {
-      return window.testDebugLogger();
+  const runRollbackTest = () => {
+    if (typeof window !== 'undefined' && window.testRollback) {
+      return window.testRollback();
     }
   };
 
-  const runCombatTest = () => {
-    if (typeof window !== 'undefined' && window.testCombat) {
-      return window.testCombat();
+  const runRedoTest = () => {
+    if (typeof window !== 'undefined' && window.testRedo) {
+      return window.testRedo();
     }
   };
 
-  return { runEventTest, runDebugTest, runCombatTest };
+  return { runEventTest, runRollbackTest, runRedoTest };
 } 

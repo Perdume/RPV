@@ -6,18 +6,15 @@ export class Debug extends BaseAbility {
   private isDebugging: boolean = false;
 
   constructor() {
-    super('디버그로거', '디버그 로거', '디버그 로그를 출력합니다.', 0);
+    super('디버그로거', '디버그 로거', '디버그 로그를 출력합니다.', 0, 0);
   }
 
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {
-    var player = event.data.player;
-    var target = event.data.target;
-    var damage = event.data.damage;
-    var targetHp = event.data.targetHp;
-    var attacker = event.data.attacker;
-    var targetId = event.data.targetId;
-    var attackerId = event.data.attackerId;
-    damage = 10;
+    const owner = this.getOwner();
+    console.log("[ABILITY DEBUG] OWNER: "+ owner);
+    if (owner === event.data.attacker) {
+      event.data.damage = 10;
+    }
     this.logEvent('Before Attack', event);
   }
 
@@ -81,7 +78,8 @@ export class Debug extends BaseAbility {
   public logEvent(eventName: string, event: ModifiableEvent | { message: string }): void {
     if (this.isDebugging) return; // 무한 루프 방지
     
-    const debugMessage = `[ABILITY DEBUG] ${eventName}: ${JSON.stringify(event)}`;
+    const owner = this.getOwner();
+    const debugMessage = `[ABILITY DEBUG] ${eventName} (Owner: ${owner}): ${JSON.stringify(event)}`;
     this.logs.push(debugMessage);
     console.log(debugMessage); // F12 콘솔에 출력
   }
