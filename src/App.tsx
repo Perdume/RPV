@@ -8,7 +8,7 @@ import { Layout } from './components/Layout';
 import { GlobalStyle } from './styles/GlobalStyle';
 import { TurnProcessor } from './utils/turnProcessor';
 import { TurnControl } from './components/TurnControl';
-import { EventSystem } from './EventSystem';
+import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
 import { useEventTesting } from './utils/manualEventTest';
 

@@ -1,3 +1,5 @@
+import { EventSystem } from '../utils/eventSystem';
+
 export enum PlayerStatus {
   ALIVE = 'ALIVE',
   WOUNDED = 'WOUNDED',
@@ -74,4 +76,94 @@ export interface DefendEvent {
   player: PlayerId;
   defenseGauge: number;
   damageReduction: number;
+}
+
+export interface ModifiableEvent {
+  type: GameEventType;
+  timestamp: number;
+  data: any;
+  cancelled: boolean;
+  modified: boolean;
+}
+
+export enum GameEventType {
+  // 시스템 이벤트
+  GAME_START = 'GAME_START',
+  GAME_END = 'GAME_END',
+  TURN_START = 'TURN_START',
+  TURN_END = 'TURN_END',
+  DEATH = 'DEATH',
+  PERFECT_GUARD = 'PERFECT_GUARD',
+  FOCUS_ATTACK = 'FOCUS_ATTACK',
+  
+  // Pre/Post 이벤트 패턴
+  BEFORE_ATTACK = 'BEFORE_ATTACK',
+  AFTER_ATTACK = 'AFTER_ATTACK',
+  BEFORE_DEFEND = 'BEFORE_DEFEND',
+  AFTER_DEFEND = 'AFTER_DEFEND',
+  BEFORE_EVADE = 'BEFORE_EVADE',
+  AFTER_EVADE = 'AFTER_EVADE',
+  BEFORE_PASS = 'BEFORE_PASS',
+  AFTER_PASS = 'AFTER_PASS',
+  
+  // 행동 이벤트
+  ATTACK_ACTION = 'ATTACK_ACTION',
+  DEFEND_ACTION = 'DEFEND_ACTION',
+  EVADE_ACTION = 'EVADE_ACTION',
+  PASS_ACTION = 'PASS_ACTION',
+  ABILITY_USE = 'ABILITY_USE',
+  
+  // 결과 이벤트
+  DAMAGE_DEALT = 'DAMAGE_DEALT',
+  DEFENSE_CONSUMED = 'DEFENSE_CONSUMED',
+  EVADE_SUCCESS = 'EVADE_SUCCESS',
+  EVADE_FAIL = 'EVADE_FAIL'
+}
+
+export interface GameEvent extends ModifiableEvent {
+  // 기존 GameEvent 인터페이스 유지
+}
+
+export interface Ability {
+  id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  cooldown: number;
+  maxCooldown: number;
+
+  // Pre/Post 이벤트 핸들러
+  onBeforeAttack?: (event: ModifiableEvent) => Promise<void>;
+  onAfterAttack?: (event: ModifiableEvent) => Promise<void>;
+  onBeforeDefend?: (event: ModifiableEvent) => Promise<void>;
+  onAfterDefend?: (event: ModifiableEvent) => Promise<void>;
+  onBeforeEvade?: (event: ModifiableEvent) => Promise<void>;
+  onAfterEvade?: (event: ModifiableEvent) => Promise<void>;
+  onBeforePass?: (event: ModifiableEvent) => Promise<void>;
+  onAfterPass?: (event: ModifiableEvent) => Promise<void>;
+
+  // 시스템 이벤트 핸들러
+  onTurnStart?: (event: ModifiableEvent) => Promise<void>;
+  onTurnEnd?: (event: ModifiableEvent) => Promise<void>;
+  onGameStart?: (event: ModifiableEvent) => Promise<void>;
+  onGameEnd?: (event: ModifiableEvent) => Promise<void>;
+  onDeath?: (event: ModifiableEvent) => Promise<void>;
+  onPerfectGuard?: (event: ModifiableEvent) => Promise<void>;
+  onFocusAttack?: (event: ModifiableEvent) => Promise<void>;
+
+  // 쿨다운 관리
+  resetCooldown(): void;
+  isOnCooldown(): boolean;
+  getRemainingCooldown(): number;
+  updateCooldown(): void;
+}
+
+export interface AbilityContext {
+  player: Player;
+  target?: Player;
+  players: Player[];
+  eventSystem: EventSystem;
+  variables: Map<string, any>;
+  currentTurn: number;
+  logs: string[];
 } 

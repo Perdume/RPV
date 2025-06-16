@@ -1,72 +1,40 @@
-import { Player, PlayerStatus } from '../types/game.types';
-import { Ability, AbilityContext } from './Ability';
+import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext } from '../types/game.types';
 
 export abstract class BaseAbility implements Ability {
   id: string;
   name: string;
   description: string;
-  maxUses: number;
-  cooldown: number;
+  isActive: boolean = true;
+  cooldown: number = 0;
   maxCooldown: number;
 
-  constructor(
-    id: string,
-    maxUses: number,
-    description: string,
-    cooldown: number = 0
-  ) {
+  constructor(id: string, name: string, description: string, maxCooldown: number = 0) {
     this.id = id;
-    this.name = this.formatName(id);
+    this.name = name;
     this.description = description;
-    this.maxUses = maxUses;
-    this.cooldown = cooldown;
-    this.maxCooldown = cooldown;
+    this.maxCooldown = maxCooldown;
   }
 
-  protected formatName(id: string): string {
-    return id
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
-
-  // 기본 이벤트 핸들러들
-  async onTurnStart(context: AbilityContext): Promise<void> {}
-  async onTurnEnd(context: AbilityContext): Promise<void> {}
-  async onAttack(context: AbilityContext): Promise<void> {}
-  async onDefend(context: AbilityContext): Promise<void> {}
-  async onEvade(context: AbilityContext): Promise<void> {}
-  async onDeath(context: AbilityContext): Promise<void> {}
-  async onFocusAttack(context: AbilityContext): Promise<void> {}
-  async onAbilityUse(context: AbilityContext): Promise<void> {}
-  async onGameStart(context: AbilityContext): Promise<void> {}
-  async onGameEnd(context: AbilityContext): Promise<void> {}
+  // Pre/Post 이벤트 핸들러
+  async onBeforeAttack(event: ModifiableEvent): Promise<void> {}
+  async onAfterAttack(event: ModifiableEvent): Promise<void> {}
+  async onBeforeDefend(event: ModifiableEvent): Promise<void> {}
+  async onAfterDefend(event: ModifiableEvent): Promise<void> {}
+  async onBeforeEvade(event: ModifiableEvent): Promise<void> {}
+  async onAfterEvade(event: ModifiableEvent): Promise<void> {}
+  async onBeforePass(event: ModifiableEvent): Promise<void> {}
+  async onAfterPass(event: ModifiableEvent): Promise<void> {}
 
   // 시스템 이벤트 핸들러
-  async onPerfectGuard(context: AbilityContext): Promise<void> {}
+  async onTurnStart(event: ModifiableEvent): Promise<void> {}
+  async onTurnEnd(event: ModifiableEvent): Promise<void> {}
+  async onGameStart(event: ModifiableEvent): Promise<void> {}
+  async onGameEnd(event: ModifiableEvent): Promise<void> {}
+  async onDeath(event: ModifiableEvent): Promise<void> {}
+  async onPerfectGuard(event: ModifiableEvent): Promise<void> {}
+  async onFocusAttack(event: ModifiableEvent): Promise<void> {}
 
-  // 행동 이벤트 핸들러
-  async onAttackAction(context: AbilityContext): Promise<void> {}
-  async onDefendAction(context: AbilityContext): Promise<void> {}
-  async onEvadeAction(context: AbilityContext): Promise<void> {}
-  async onPassAction(context: AbilityContext): Promise<void> {}
-
-  // 결과 이벤트 핸들러
-  async onDamageDealt(context: AbilityContext): Promise<void> {}
-  async onDefenseConsumed(context: AbilityContext): Promise<void> {}
-  async onEvadeSuccess(context: AbilityContext): Promise<void> {}
-  async onEvadeFail(context: AbilityContext): Promise<void> {}
-
-  // 능력 사용 시 호출
-  abstract use(context: AbilityContext): Promise<void>;
-  
-  // 쿨다운 업데이트
-  updateCooldown(): void {
-    if (this.cooldown > 0) {
-      this.cooldown--;
-    }
-  }
-
+  // 쿨다운 관리
   resetCooldown(): void {
     this.cooldown = this.maxCooldown;
   }
@@ -77,6 +45,12 @@ export abstract class BaseAbility implements Ability {
 
   getRemainingCooldown(): number {
     return this.cooldown;
+  }
+
+  updateCooldown(): void {
+    if (this.cooldown > 0) {
+      this.cooldown--;
+    }
   }
 
   // 변수 관리 헬퍼 메서드

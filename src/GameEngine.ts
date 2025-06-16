@@ -1,8 +1,7 @@
 import { Player as GamePlayer, PlayerId, Action, PlayerStatus as GamePlayerStatus, GameStateData } from './types';
-import { Player, PlayerStatus } from './types/game.types';
+import { Player, PlayerStatus, ModifiableEvent, GameEventType } from './types/game.types';
 import { GameState } from './GameState';
-import { EventSystem } from './EventSystem';
-import { GameEventType } from './events';
+import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
 import { Debug } from './abilities/Debug';
 
@@ -16,7 +15,7 @@ function convertPlayerStatus(status: GamePlayerStatus): PlayerStatus {
     case GamePlayerStatus.DEAD:
       return PlayerStatus.DEAD;
     case GamePlayerStatus.EVADING:
-      return PlayerStatus.ALIVE; // Map EVADING to ALIVE since game.types doesn't have EVADING
+      return PlayerStatus.ALIVE;
     default:
       return PlayerStatus.ALIVE;
   }
@@ -65,30 +64,7 @@ export class GameEngine {
       targetId: firstPlayer.target
     };
     
-    this.debug.use({
-      player,
-      players: Array.from(this.gameState.players.values()).map(p => ({
-        ...p,
-        status: convertPlayerStatus(p.status),
-        isPerfectGuard: false,
-        maxAbilityUses: 0,
-        hasDefended: false,
-        wasAttacked: false,
-        isAbilitySealed: false,
-        isDefenseSealed: false,
-        damageReduction: 0,
-        isGhost: false,
-        currentTurn: this.gameState.currentTurn,
-        noDamageTurns: 0,
-        inactiveTurns: 0,
-        actionType: p.action as any,
-        targetId: p.target
-      })),
-      eventSystem: this.eventSystem,
-      variables: new Map(),
-      currentTurn: this.gameState.currentTurn,
-      logs: this.debugLogs
-    });
+    this.debug.logEvent('Debug', { message });
   }
 
   loadGameState(data: GameStateData): void {
@@ -118,11 +94,14 @@ export class GameEngine {
     this.addDebugLog(`[턴 시작] ${this.gameState.currentTurn}턴이 시작됩니다.`);
 
     // Emit turn start event
-    await this.eventSystem.emit({
+    const turnStartEvent: ModifiableEvent = {
       type: GameEventType.TURN_START,
       timestamp: Date.now(),
-      data: { turn: this.gameState.currentTurn }
-    });
+      data: { turn: this.gameState.currentTurn },
+      cancelled: false,
+      modified: false
+    };
+    await this.eventSystem.emit(turnStartEvent);
 
     // Process death zone
     this.gameState.processDeathZone();
@@ -169,11 +148,14 @@ export class GameEngine {
     this.gameState.currentTurn++;
 
     // Emit turn end event
-    await this.eventSystem.emit({
+    const turnEndEvent: ModifiableEvent = {
       type: GameEventType.TURN_END,
       timestamp: Date.now(),
-      data: { turn: this.gameState.currentTurn - 1 }
-    });
+      data: { turn: this.gameState.currentTurn - 1 },
+      cancelled: false,
+      modified: false
+    };
+    await this.eventSystem.emit(turnEndEvent);
 
     this.addDebugLog(`[턴 종료] ${this.gameState.currentTurn - 1}턴이 종료되었습니다.`);
   }
@@ -196,12 +178,19 @@ export class GameEngine {
       const evadeChance = this.calculateEvadeChance(target);
       if (Math.random() * 100 < evadeChance) {
         this.addDebugLog(`[회피 성공] ${target.name}이(가) 공격을 회피했습니다.`);
-        await this.eventSystem.emitEvade({
-          player: targetId,
-          attacker: attacker.id,
-          success: true,
-          chance: evadeChance
-        });
+        const evadeEvent: ModifiableEvent = {
+          type: GameEventType.EVADE_ACTION,
+          timestamp: Date.now(),
+          data: {
+            player: targetId,
+            attacker: attacker.id,
+            success: true,
+            chance: evadeChance
+          },
+          cancelled: false,
+          modified: false
+        };
+        await this.eventSystem.emit(evadeEvent);
         return;
       }
     }
@@ -212,7 +201,7 @@ export class GameEngine {
     if (attackCount >= 3) { // Focus attack threshold
       damage += 2; // Focus attack bonus
       this.addDebugLog(`[집중 공격] ${attacker.name}의 집중 공격이 발동되었습니다.`);
-      await this.eventSystem.emit({
+      const focusAttackEvent: ModifiableEvent = {
         type: GameEventType.FOCUS_ATTACK,
         timestamp: Date.now(),
         data: {
@@ -220,8 +209,11 @@ export class GameEngine {
           target: targetId,
           damage,
           attackCount
-        }
-      });
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(focusAttackEvent);
     }
 
     // Apply damage
@@ -229,11 +221,18 @@ export class GameEngine {
       damage = Math.max(0, damage - 1);
       target.defenseGauge--;
       this.addDebugLog(`[방어] ${target.name}의 방어 게이지가 1 감소했습니다.`);
-      await this.eventSystem.emitDefend({
-        player: targetId,
-        defenseGauge: target.defenseGauge,
-        damageReduction: 1
-      });
+      const defendEvent: ModifiableEvent = {
+        type: GameEventType.DEFEND_ACTION,
+        timestamp: Date.now(),
+        data: {
+          player: targetId,
+          defenseGauge: target.defenseGauge,
+          damageReduction: 1
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(defendEvent);
     }
 
     const oldHp = target.hp;
@@ -241,22 +240,36 @@ export class GameEngine {
     
     this.addDebugLog(`[데미지] ${target.name}이(가) ${damage}의 데미지를 입었습니다.`);
     
-    await this.eventSystem.emitAttack({
-      attacker: attacker.id,
-      target: targetId,
-      damage,
-      targetHp: target.hp
-    });
+    const attackEvent: ModifiableEvent = {
+      type: GameEventType.ATTACK_ACTION,
+      timestamp: Date.now(),
+      data: {
+        attacker: attacker.id,
+        target: targetId,
+        damage,
+        targetHp: target.hp
+      },
+      cancelled: false,
+      modified: false
+    };
+    await this.eventSystem.emit(attackEvent);
 
     // Check for death
     if (target.hp <= 0) {
       target.status = GamePlayerStatus.DEAD;
       this.addDebugLog(`[사망] ${target.name}이(가) 탈락했습니다.`);
-      await this.eventSystem.emitDeath({
-        player: targetId,
-        killer: attacker.id,
-        lastDamage: damage
-      });
+      const deathEvent: ModifiableEvent = {
+        type: GameEventType.DEATH,
+        timestamp: Date.now(),
+        data: {
+          player: targetId,
+          killer: attacker.id,
+          lastDamage: damage
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(deathEvent);
     }
   }
 
@@ -264,22 +277,36 @@ export class GameEngine {
     if (player.defenseGauge < player.maxDefenseGauge) {
       player.defenseGauge++;
       this.addDebugLog(`[방어] ${player.name}의 방어 게이지가 1 증가했습니다.`);
-      await this.eventSystem.emitDefend({
-        player: player.id,
-        defenseGauge: player.defenseGauge,
-        damageReduction: 1
-      });
+      const defendEvent: ModifiableEvent = {
+        type: GameEventType.DEFEND_ACTION,
+        timestamp: Date.now(),
+        data: {
+          player: player.id,
+          defenseGauge: player.defenseGauge,
+          damageReduction: 1
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(defendEvent);
     }
   }
 
   private async processEvade(player: GamePlayer): Promise<void> {
     player.status = GamePlayerStatus.EVADING;
     this.addDebugLog(`[회피] ${player.name}이(가) 회피 상태가 되었습니다.`);
-    await this.eventSystem.emitEvade({
-      player: player.id,
-      success: false,
-      chance: this.calculateEvadeChance(player)
-    });
+    const evadeEvent: ModifiableEvent = {
+      type: GameEventType.EVADE_ACTION,
+      timestamp: Date.now(),
+      data: {
+        player: player.id,
+        success: false,
+        chance: this.calculateEvadeChance(player)
+      },
+      cancelled: false,
+      modified: false
+    };
+    await this.eventSystem.emit(evadeEvent);
   }
 
   private calculateEvadeChance(player: GamePlayer): number {
@@ -290,7 +317,7 @@ export class GameEngine {
     return Math.min(100, Math.max(0, baseChance));
   }
 
-  on(eventType: GameEventType, handler: (event: any) => void | Promise<void>): void {
+  on(eventType: GameEventType, handler: (event: ModifiableEvent) => Promise<void>): void {
     this.eventSystem.on(eventType, handler);
   }
 
@@ -298,7 +325,7 @@ export class GameEngine {
     return this.gameState.toJSON();
   }
 
-  getEventHistory(): any[] {
+  getEventHistory(): ModifiableEvent[] {
     return this.eventSystem.getEventHistory();
   }
 } 

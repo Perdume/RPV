@@ -1,12 +1,10 @@
-import { EventSystem } from '../EventSystem';
-import { GameEventType } from '../events';
+import { EventSystem } from '../utils/eventSystem';
+import { GameEventType, ModifiableEvent, Ability, Player, AbilityContext } from '../types/game.types';
 import { BaseAbility } from './BaseAbility';
-import { AbilityContext } from './Ability';
-import { Player } from '../types/game.types';
 import { Debug } from './Debug';
 
 export class AbilityManager {
-  private abilities: Map<string, BaseAbility> = new Map();
+  private abilities: Map<string, Ability> = new Map();
   private playerAbilities: Map<number, BaseAbility> = new Map();
   private gameState: { players: Player[] } | null = null;
   private eventSystem: EventSystem;
@@ -17,7 +15,7 @@ export class AbilityManager {
   constructor(eventSystem: EventSystem) {
     this.eventSystem = eventSystem;
     this.registerDefaultAbilities();
-    this.setupEventListeners();
+    this.setupEventHandlers();
   }
 
   private registerDefaultAbilities(): void {
@@ -26,26 +24,23 @@ export class AbilityManager {
     this.abilities.set('디버그로거', debug); // data.json의 "ability" 값과 매칭
   }
 
-  private setupEventListeners(): void {
-    // 시스템 이벤트
+  private setupEventHandlers(): void {
+    // Pre/Post 이벤트 핸들러
+    this.eventSystem.on(GameEventType.BEFORE_ATTACK, this.handleBeforeAttack.bind(this));
+    this.eventSystem.on(GameEventType.AFTER_ATTACK, this.handleAfterAttack.bind(this));
+    this.eventSystem.on(GameEventType.BEFORE_DEFEND, this.handleBeforeDefend.bind(this));
+    this.eventSystem.on(GameEventType.AFTER_DEFEND, this.handleAfterDefend.bind(this));
+    this.eventSystem.on(GameEventType.BEFORE_EVADE, this.handleBeforeEvade.bind(this));
+    this.eventSystem.on(GameEventType.AFTER_EVADE, this.handleAfterEvade.bind(this));
+    this.eventSystem.on(GameEventType.BEFORE_PASS, this.handleBeforePass.bind(this));
+    this.eventSystem.on(GameEventType.AFTER_PASS, this.handleAfterPass.bind(this));
+
+    // 기존 이벤트 핸들러
     this.eventSystem.on(GameEventType.TURN_START, this.handleTurnStart.bind(this));
     this.eventSystem.on(GameEventType.TURN_END, this.handleTurnEnd.bind(this));
     this.eventSystem.on(GameEventType.GAME_START, this.handleGameStart.bind(this));
     this.eventSystem.on(GameEventType.GAME_END, this.handleGameEnd.bind(this));
     this.eventSystem.on(GameEventType.PERFECT_GUARD, this.handlePerfectGuard.bind(this));
-
-    // 행동 이벤트
-    this.eventSystem.on(GameEventType.ATTACK_ACTION, this.handleAttackAction.bind(this));
-    this.eventSystem.on(GameEventType.DEFEND_ACTION, this.handleDefendAction.bind(this));
-    this.eventSystem.on(GameEventType.EVADE_ACTION, this.handleEvadeAction.bind(this));
-    this.eventSystem.on(GameEventType.PASS_ACTION, this.handlePassAction.bind(this));
-    this.eventSystem.on(GameEventType.ABILITY_USE, this.handleAbilityUse.bind(this));
-
-    // 결과 이벤트
-    this.eventSystem.on(GameEventType.DAMAGE_DEALT, this.handleDamageDealt.bind(this));
-    this.eventSystem.on(GameEventType.DEFENSE_CONSUMED, this.handleDefenseConsumed.bind(this));
-    this.eventSystem.on(GameEventType.EVADE_SUCCESS, this.handleEvadeSuccess.bind(this));
-    this.eventSystem.on(GameEventType.EVADE_FAIL, this.handleEvadeFail.bind(this));
     this.eventSystem.on(GameEventType.DEATH, this.handleDeath.bind(this));
     this.eventSystem.on(GameEventType.FOCUS_ATTACK, this.handleFocusAttack.bind(this));
   }
@@ -61,7 +56,7 @@ export class AbilityManager {
     const mappedAbilityId = this.mapAbilityId(abilityId);
     const ability = this.abilities.get(mappedAbilityId);
     if (ability) {
-      this.playerAbilities.set(playerId, ability);
+      this.playerAbilities.set(playerId, ability as BaseAbility);
     }
   }
 
@@ -92,208 +87,147 @@ export class AbilityManager {
   }
 
   // 시스템 이벤트 핸들러
-  private async handleTurnStart(event: any): Promise<void> {
-    const { turn } = event.data;
-    this.currentTurn = turn;
-    for (const [playerId, ability] of this.playerAbilities) {
-      const player = this.findPlayer(playerId);
-      if (player) {
-        const context = this.createContext(player);
-        await ability.onTurnStart(context);
+  private async handleTurnStart(event: ModifiableEvent): Promise<void> {
+    this.currentTurn = event.data.turn;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onTurnStart?.(event);
       }
     }
   }
 
-  private async handleTurnEnd(event: any): Promise<void> {
-    const { turn } = event.data;
-    this.currentTurn = turn;
-    for (const [playerId, ability] of this.playerAbilities) {
-      const player = this.findPlayer(playerId);
-      if (player) {
-        const context = this.createContext(player);
-        await ability.onTurnEnd(context);
+  private async handleTurnEnd(event: ModifiableEvent): Promise<void> {
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onTurnEnd?.(event);
       }
     }
   }
 
-  private async handleGameStart(event: any): Promise<void> {
-    for (const [playerId, ability] of this.playerAbilities) {
-      const player = this.findPlayer(playerId);
-      if (player) {
-        const context = this.createContext(player);
-        await ability.onGameStart(context);
+  private async handleGameStart(event: ModifiableEvent): Promise<void> {
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onGameStart?.(event);
       }
     }
   }
 
-  private async handleGameEnd(event: any): Promise<void> {
-    for (const [playerId, ability] of this.playerAbilities) {
-      const player = this.findPlayer(playerId);
-      if (player) {
-        const context = this.createContext(player);
-        await ability.onGameEnd(context);
+  private async handleGameEnd(event: ModifiableEvent): Promise<void> {
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onGameEnd?.(event);
       }
     }
   }
 
-  private async handlePerfectGuard(event: any): Promise<void> {
+  private async handlePerfectGuard(event: ModifiableEvent): Promise<void> {
     const { player } = event.data;
     const playerObj = this.findPlayer(player);
     if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj);
-        await ability.onPerfectGuard(context);
+      for (const ability of this.abilities.values()) {
+        if (ability.isActive) {
+          await ability.onPerfectGuard?.(event);
+        }
       }
     }
   }
 
-  // 행동 이벤트 핸들러
-  private async handleAttackAction(event: any): Promise<void> {
-    const { attacker, target } = event.data;
-    const attackerPlayer = this.findPlayer(attacker);
-    const targetPlayer = this.findPlayer(target);
-    
-    if (attackerPlayer && targetPlayer) {
-      const ability = this.playerAbilities.get(attacker);
-      if (ability) {
-        const context = this.createContext(attackerPlayer, targetPlayer);
-        await ability.onAttackAction(context);
-      }
-    }
-  }
-
-  private async handleDefendAction(event: any): Promise<void> {
-    const { player } = event.data;
-    const playerObj = this.findPlayer(player);
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj);
-        await ability.onDefendAction(context);
-      }
-    }
-  }
-
-  private async handleEvadeAction(event: any): Promise<void> {
-    const { player } = event.data;
-    const playerObj = this.findPlayer(player);
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj);
-        await ability.onEvadeAction(context);
-      }
-    }
-  }
-
-  private async handlePassAction(event: any): Promise<void> {
-    const { player } = event.data;
-    const playerObj = this.findPlayer(player);
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj);
-        await ability.onPassAction(context);
-      }
-    }
-  }
-
-  // 결과 이벤트 핸들러
-  private async handleDamageDealt(event: any): Promise<void> {
-    const { attacker, target } = event.data;
-    const attackerPlayer = this.findPlayer(attacker);
-    const targetPlayer = this.findPlayer(target);
-    
-    if (attackerPlayer && targetPlayer) {
-      const ability = this.playerAbilities.get(attacker);
-      if (ability) {
-        const context = this.createContext(attackerPlayer, targetPlayer);
-        await ability.onDamageDealt(context);
-      }
-    }
-  }
-
-  private async handleDefenseConsumed(event: any): Promise<void> {
-    const { player, attacker } = event.data;
-    const playerObj = this.findPlayer(player);
-    const attackerObj = attacker ? this.findPlayer(attacker) : undefined;
-    
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj, attackerObj);
-        await ability.onDefenseConsumed(context);
-      }
-    }
-  }
-
-  private async handleEvadeSuccess(event: any): Promise<void> {
-    const { player, attacker } = event.data;
-    const playerObj = this.findPlayer(player);
-    const attackerObj = attacker ? this.findPlayer(attacker) : undefined;
-    
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj, attackerObj);
-        await ability.onEvadeSuccess(context);
-      }
-    }
-  }
-
-  private async handleEvadeFail(event: any): Promise<void> {
-    const { player, attacker } = event.data;
-    const playerObj = this.findPlayer(player);
-    const attackerObj = attacker ? this.findPlayer(attacker) : undefined;
-    
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj, attackerObj);
-        await ability.onEvadeFail(context);
-      }
-    }
-  }
-
-  private async handleDeath(event: any): Promise<void> {
+  private async handleDeath(event: ModifiableEvent): Promise<void> {
     const { player, killer } = event.data;
     const playerObj = this.findPlayer(player);
     const killerObj = killer ? this.findPlayer(killer) : undefined;
     
     if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj, killerObj);
-        await ability.onDeath(context);
+      for (const ability of this.abilities.values()) {
+        if (ability.isActive) {
+          await ability.onDeath?.(event);
+        }
       }
     }
   }
 
-  private async handleFocusAttack(event: any): Promise<void> {
+  private async handleFocusAttack(event: ModifiableEvent): Promise<void> {
     const { attacker, target } = event.data;
     const attackerPlayer = this.findPlayer(attacker);
     const targetPlayer = this.findPlayer(target);
     
     if (attackerPlayer && targetPlayer) {
-      const ability = this.playerAbilities.get(attacker);
-      if (ability) {
-        const context = this.createContext(attackerPlayer, targetPlayer);
-        await ability.onFocusAttack(context);
+      for (const ability of this.abilities.values()) {
+        if (ability.isActive) {
+          await ability.onFocusAttack?.(event);
+        }
       }
     }
   }
 
-  private async handleAbilityUse(event: any): Promise<void> {
-    const { player, target } = event.data;
-    const playerObj = this.findPlayer(player);
-    const targetObj = target ? this.findPlayer(target) : undefined;
-    
-    if (playerObj) {
-      const ability = this.playerAbilities.get(player);
-      if (ability) {
-        const context = this.createContext(playerObj, targetObj);
-        await ability.onAbilityUse(context);
+  private async handleBeforeAttack(event: ModifiableEvent): Promise<void> {
+    const { attacker, target, damage } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onBeforeAttack?.(event);
+      }
+    }
+  }
+
+  private async handleAfterAttack(event: ModifiableEvent): Promise<void> {
+    const { attacker, target, damage } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onAfterAttack?.(event);
+      }
+    }
+  }
+
+  private async handleBeforeDefend(event: ModifiableEvent): Promise<void> {
+    const { player } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onBeforeDefend?.(event);
+      }
+    }
+  }
+
+  private async handleAfterDefend(event: ModifiableEvent): Promise<void> {
+    const { player, defenseGauge } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onAfterDefend?.(event);
+      }
+    }
+  }
+
+  private async handleBeforeEvade(event: ModifiableEvent): Promise<void> {
+    const { player, attacker } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onBeforeEvade?.(event);
+      }
+    }
+  }
+
+  private async handleAfterEvade(event: ModifiableEvent): Promise<void> {
+    const { player, attacker, success } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onAfterEvade?.(event);
+      }
+    }
+  }
+
+  private async handleBeforePass(event: ModifiableEvent): Promise<void> {
+    const { player } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onBeforePass?.(event);
+      }
+    }
+  }
+
+  private async handleAfterPass(event: ModifiableEvent): Promise<void> {
+    const { player } = event.data;
+    for (const ability of this.abilities.values()) {
+      if (ability.isActive) {
+        await ability.onAfterPass?.(event);
       }
     }
   }
@@ -315,5 +249,17 @@ export class AbilityManager {
 
   getVariables(): Map<string, any> {
     return this.variables;
+  }
+
+  registerAbility(ability: Ability): void {
+    this.abilities.set(ability.id, ability);
+  }
+
+  getAbility(id: string): Ability | undefined {
+    return this.abilities.get(id);
+  }
+
+  getAllAbilities(): Ability[] {
+    return Array.from(this.abilities.values());
   }
 } 

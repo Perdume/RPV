@@ -1,5 +1,5 @@
 import { EventSystem } from '../EventSystem';
-import { Player } from '../types/game.types';
+import { Player, ModifiableEvent } from '../types/game.types';
 
 export interface AbilityContext {
   player: Player;
@@ -15,16 +15,30 @@ export interface Ability {
   id: string;
   name: string;
   description: string;
-  maxUses: number;
+  isActive: boolean;
   cooldown: number;
+  maxCooldown: number;
 
-  use(context: AbilityContext): Promise<void>;
-  
-  onTurnStart?(context: AbilityContext): Promise<void>;
-  onTurnEnd?(context: AbilityContext): Promise<void>;
-  onAttack?(context: AbilityContext): Promise<void>;
-  onDefend?(context: AbilityContext): Promise<void>;
-  onEvade?(context: AbilityContext): Promise<void>;
-  onDamage?(context: AbilityContext): Promise<void>;
-  onDeath?(context: AbilityContext): Promise<void>;
+  // Pre/Post 이벤트 핸들러
+  onBeforeAttack?: (event: ModifiableEvent) => Promise<void>;
+  onAfterAttack?: (event: ModifiableEvent) => Promise<void>;
+  onBeforeDefend?: (event: ModifiableEvent) => Promise<void>;
+  onAfterDefend?: (event: ModifiableEvent) => Promise<void>;
+  onBeforeEvade?: (event: ModifiableEvent) => Promise<void>;
+  onAfterEvade?: (event: ModifiableEvent) => Promise<void>;
+  onBeforePass?: (event: ModifiableEvent) => Promise<void>;
+  onAfterPass?: (event: ModifiableEvent) => Promise<void>;
+
+  // 시스템 이벤트 핸들러
+  onTurnStart?: (event: ModifiableEvent) => Promise<void>;
+  onTurnEnd?: (event: ModifiableEvent) => Promise<void>;
+  onGameStart?: (event: ModifiableEvent) => Promise<void>;
+  onGameEnd?: (event: ModifiableEvent) => Promise<void>;
+  onDeath?: (event: ModifiableEvent) => Promise<void>;
+  onPerfectGuard?: (event: ModifiableEvent) => Promise<void>;
+
+  // 쿨다운 관리
+  resetCooldown(): void;
+  isOnCooldown(): boolean;
+  getRemainingCooldown(): number;
 } 

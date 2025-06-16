@@ -2,8 +2,8 @@
 // 브라우저 콘솔에서 직접 실행할 수 있는 테스트 코드
 
 import { TurnProcessor } from './turnProcessor';
-import { EventSystem } from '../EventSystem';
-import { GameEventType } from '../events';
+import { EventSystem } from './eventSystem';
+import { GameEventType, ModifiableEvent } from '../types/game.types';
 import { PlayerStatus } from '../types/game.types';
 
 // 글로벌 테스트 함수
@@ -20,11 +20,11 @@ window.testEvents = async function() {
   console.log('🧪 이벤트 시스템 테스트 시작');
   
   const eventSystem = new EventSystem();
-  const capturedEvents: any[] = [];
+  const capturedEvents: ModifiableEvent[] = [];
 
   // 모든 이벤트 리스너 등록
   Object.values(GameEventType).forEach(eventType => {
-    eventSystem.on(eventType, (event) => {
+    eventSystem.on(eventType, async (event: ModifiableEvent) => {
       capturedEvents.push(event);
       console.log(`📡 [${eventType}]`, event.data);
     });
@@ -125,7 +125,7 @@ window.testDebugLogger = async function() {
   const eventSystem = new EventSystem();
   
   // TURN_START 이벤트 리스너만 등록
-  eventSystem.on(GameEventType.TURN_START, (event) => {
+  eventSystem.on(GameEventType.TURN_START, async (event: ModifiableEvent) => {
     console.log('🎯 TURN_START 이벤트 감지!', event.data);
   });
 
@@ -191,7 +191,7 @@ window.testCombat = async function() {
 
   // 모든 전투 이벤트 모니터링
   [GameEventType.ATTACK_ACTION, GameEventType.DEFEND_ACTION, GameEventType.EVADE_ACTION, GameEventType.DEATH].forEach(eventType => {
-    eventSystem.on(eventType, (event) => {
+    eventSystem.on(eventType, async (event: ModifiableEvent) => {
       eventCount++;
       console.log(`⚡ [${eventCount}] ${eventType}:`, event.data);
     });
