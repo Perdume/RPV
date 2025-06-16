@@ -233,32 +233,33 @@ export class DataManager {
   // 능력 데이터 로드
   static async loadAbilityData(playerId: number, abilityId: string): Promise<any> {
     this.ensureFsInitialized();
+    
+    const filePath = `src/data/abilities/player_${playerId}_${abilityId}.json`;
+    
     try {
-      const content = await window.fs!.readFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, { encoding: 'utf8' });
+      const content = await window.fs!.readFile(filePath, { encoding: 'utf8' });
       return JSON.parse(content);
     } catch (error) {
-      const fsError = error as FileSystemError;
-      if (fsError.code === 'ENOENT') {
-        // 파일이 없는 경우 기본 데이터 생성
-        const defaultData = { variables: {} };
-        await this.saveAbilityData(playerId, abilityId, defaultData);
-        return defaultData;
-      }
-      console.error('능력 데이터 로드 실패:', fsError.message);
-      throw fsError;
+      // 파일이 없는 경우 기본 데이터 생성
+      const defaultData = { variables: {} };
+      await this.saveAbilityData(playerId, abilityId, defaultData);
+      return defaultData;
     }
   }
 
   // 능력 데이터 저장
   static async saveAbilityData(playerId: number, abilityId: string, data: any): Promise<void> {
     this.ensureFsInitialized();
+    
+    const filePath = `src/data/abilities/player_${playerId}_${abilityId}.json`;
+    
     try {
       const content = JSON.stringify(data, null, 2);
-      await window.fs!.writeFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, content, { encoding: 'utf8' });
+      await window.fs!.writeFile(filePath, content, { encoding: 'utf8' });
     } catch (error) {
-      const fsError = error as FileSystemError;
-      console.error('능력 데이터 저장 실패:', fsError.message);
-      throw fsError;
+      console.error('능력 데이터 저장 실패:', error);
+      // 웹 환경에서는 localStorage 사용
+      localStorage.setItem(`ability:${playerId}:${abilityId}`, JSON.stringify(data));
     }
   }
 } 

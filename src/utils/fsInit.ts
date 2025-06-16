@@ -3,9 +3,16 @@ export function initFileSystem() {
   if (!window.fs) {
     const fs = {
       async readFile(path: string, options: { encoding: string }): Promise<string> {
+        // Electron 환경이 아닐 때는 fetch 사용
         if (!window.electron?.ipcRenderer) {
-          throw new Error('Electron not initialized');
+          const response = await fetch(path);
+          if (!response.ok) {
+            throw new Error(`파일을 찾을 수 없습니다: ${path}`);
+          }
+          return await response.text();
         }
+        
+        // Electron 환경일 때
         try {
           const content = await window.electron.ipcRenderer.invoke('fs:readFile', path);
           return content;
@@ -16,9 +23,13 @@ export function initFileSystem() {
       },
 
       async writeFile(path: string, data: string, options: { encoding: string }): Promise<void> {
+        // 웹 환경에서는 localStorage 사용
         if (!window.electron?.ipcRenderer) {
-          throw new Error('Electron not initialized');
+          localStorage.setItem(`file:${path}`, data);
+          return;
         }
+        
+        // Electron 환경일 때
         try {
           await window.electron.ipcRenderer.invoke('fs:writeFile', path, data);
         } catch (error) {
@@ -29,8 +40,10 @@ export function initFileSystem() {
 
       async ensureDirectory(path: string): Promise<void> {
         if (!window.electron?.ipcRenderer) {
-          throw new Error('Electron not initialized');
+          // 웹 환경에서는 아무것도 하지 않음
+          return;
         }
+        
         try {
           await window.electron.ipcRenderer.invoke('fs:ensureDirectory', path);
         } catch (error) {
@@ -45,7 +58,7 @@ export function initFileSystem() {
     // 기본 디렉토리 구조 생성
     const initDirectories = async () => {
       if (!window.electron?.ipcRenderer) {
-        console.warn('Electron not initialized, skipping directory initialization');
+        console.warn('웹 환경에서는 디렉토리 초기화를 건너뜁니다.');
         return;
       }
 
