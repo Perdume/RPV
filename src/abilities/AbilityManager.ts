@@ -167,7 +167,6 @@ export class AbilityManager {
   }
 
   private async handleBeforeAttack(event: ModifiableEvent): Promise<void> {
-    const { attacker, target, damage } = event.data;
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onBeforeAttack?.(event);
@@ -176,7 +175,6 @@ export class AbilityManager {
   }
 
   private async handleAfterAttack(event: ModifiableEvent): Promise<void> {
-    const { attacker, target, damage } = event.data;
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onAfterAttack?.(event);
@@ -185,7 +183,6 @@ export class AbilityManager {
   }
 
   private async handleBeforeDefend(event: ModifiableEvent): Promise<void> {
-    const { player } = event.data;
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onBeforeDefend?.(event);
@@ -194,7 +191,6 @@ export class AbilityManager {
   }
 
   private async handleAfterDefend(event: ModifiableEvent): Promise<void> {
-    const { player, defenseGauge } = event.data;
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onAfterDefend?.(event);
@@ -203,7 +199,6 @@ export class AbilityManager {
   }
 
   private async handleBeforeEvade(event: ModifiableEvent): Promise<void> {
-    const { player, attacker } = event.data;
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onBeforeEvade?.(event);
@@ -212,7 +207,6 @@ export class AbilityManager {
   }
 
   private async handleAfterEvade(event: ModifiableEvent): Promise<void> {
-    const { player, attacker, success } = event.data;
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onAfterEvade?.(event);

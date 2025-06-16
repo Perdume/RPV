@@ -11,6 +11,7 @@ import { TurnControl } from './components/TurnControl';
 import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
 import { useEventTesting } from './utils/manualEventTest';
+import { initFileSystem } from './utils/fsInit';
 
 interface GameData {
   turn: number;
@@ -75,6 +76,11 @@ const App: React.FC = () => {
   const [eventSystem] = useState(() => new EventSystem());
   const [abilityManager] = useState(() => new AbilityManager(eventSystem));
   const { runEventTest, runRollbackTest, runRedoTest } = useEventTesting();
+
+  // 파일 시스템 초기화
+  useEffect(() => {
+    initFileSystem();
+  }, []);
 
   useEffect(() => {
     const loadGameData = async () => {

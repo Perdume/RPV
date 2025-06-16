@@ -1,36 +1,32 @@
 import { PlayerRecord, GameRecord, AbilityRecord } from '../types/records.types';
 import { GameSessionData, AbilityData, GameSnapshot } from '../types/game.types';
 
+interface FileSystemError extends Error {
+  code?: string;
+}
+
 export class DataManager {
-  // 세션 데이터 (Data/)
+  // 게임 세션 데이터 로드
   static async loadGameSession(): Promise<GameSessionData> {
     try {
-      const response = await fetch('/Data/data.json');
-      if (!response.ok) {
-        throw new Error('Failed to load game session data');
-      }
-      return await response.json();
+      const content = await window.fs.readFile('Data/data.json', { encoding: 'utf8' });
+      return JSON.parse(content);
     } catch (error) {
-      console.error('Error loading game session:', error);
-      throw error;
+      const fsError = error as FileSystemError;
+      console.error('게임 세션 로드 실패:', fsError.message);
+      throw fsError;
     }
   }
 
+  // 게임 세션 데이터 저장
   static async saveGameSession(data: GameSessionData): Promise<void> {
     try {
-      const response = await fetch('/Data/data.json', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data, null, 2),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to save game session data');
-      }
+      const content = JSON.stringify(data, null, 2);
+      await window.fs.writeFile('Data/data.json', content, { encoding: 'utf8' });
     } catch (error) {
-      console.error('Error saving game session:', error);
-      throw error;
+      const fsError = error as FileSystemError;
+      console.error('게임 세션 저장 실패:', fsError.message);
+      throw fsError;
     }
   }
 
@@ -162,79 +158,17 @@ export class DataManager {
     }
   }
 
-  // 능력 데이터 저장
-  static async saveAbilityData(playerId: number, abilityId: string, data: AbilityData): Promise<void> {
-    try {
-      const response = await fetch(`/src/data/abilities/player_${playerId}_${abilityId}.json`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data, null, 2),
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to save ability data for player ${playerId}, ability ${abilityId}`);
-      }
-    } catch (error) {
-      console.error(`Error saving ability data for player ${playerId}, ability ${abilityId}:`, error);
-      throw error;
-    }
-  }
-
-  // 능력 데이터 로드
-  static async loadAbilityData(playerId: number, abilityId: string): Promise<AbilityData> {
-    try {
-      const response = await fetch(`/src/data/abilities/player_${playerId}_${abilityId}.json`);
-      if (!response.ok) {
-        return {
-          playerId,
-          abilityId,
-          variables: {},
-          lastUpdated: new Date().toISOString()
-        };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error(`Error loading ability data for player ${playerId}, ability ${abilityId}:`, error);
-      return {
-        playerId,
-        abilityId,
-        variables: {},
-        lastUpdated: new Date().toISOString()
-      };
-    }
-  }
-
   // 게임 스냅샷 저장
   static async saveGameSnapshot(snapshot: GameSnapshot): Promise<void> {
     try {
-      const response = await fetch('/src/data/history/game_snapshots.json', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(snapshot, null, 2),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to save game snapshot');
-      }
+      const turnNumber = snapshot.metadata.turnNumber;
+      const dir = `src/data/history/Turn_${turnNumber}`;
+      const content = JSON.stringify(snapshot, null, 2);
+      await window.fs.writeFile(`${dir}/data.json`, content, { encoding: 'utf8' });
     } catch (error) {
-      console.error('Error saving game snapshot:', error);
-      throw error;
-    }
-  }
-
-  // 게임 스냅샷 로드
-  static async loadGameSnapshot(): Promise<GameSnapshot | null> {
-    try {
-      const response = await fetch('/src/data/history/game_snapshots.json');
-      if (!response.ok) {
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error loading game snapshot:', error);
-      return null;
+      const fsError = error as FileSystemError;
+      console.error('게임 스냅샷 저장 실패:', fsError.message);
+      throw fsError;
     }
   }
 
@@ -273,6 +207,34 @@ export class DataManager {
     } catch (error) {
       console.error(`Error saving ability stats for ${abilityId}:`, error);
       throw error;
+    }
+  }
+
+  // 능력 데이터 로드
+  static async loadAbilityData(playerId: number, abilityId: string): Promise<any> {
+    try {
+      const content = await window.fs.readFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, { encoding: 'utf8' });
+      return JSON.parse(content);
+    } catch (error) {
+      const fsError = error as FileSystemError;
+      if (fsError.code === 'ENOENT') {
+        // 파일이 없는 경우 빈 데이터 반환
+        return { variables: {} };
+      }
+      console.error('능력 데이터 로드 실패:', fsError.message);
+      throw fsError;
+    }
+  }
+
+  // 능력 데이터 저장
+  static async saveAbilityData(playerId: number, abilityId: string, data: any): Promise<void> {
+    try {
+      const content = JSON.stringify(data, null, 2);
+      await window.fs.writeFile(`src/data/abilities/player_${playerId}_${abilityId}.json`, content, { encoding: 'utf8' });
+    } catch (error) {
+      const fsError = error as FileSystemError;
+      console.error('능력 데이터 저장 실패:', fsError.message);
+      throw fsError;
     }
   }
 } 
