@@ -53,11 +53,14 @@ export class AbilityManager {
   }
 
   assignAbility(playerId: number, abilityId: string): void {
-    // ID 매핑 처리
     const mappedAbilityId = this.mapAbilityId(abilityId);
     const ability = this.abilities.get(mappedAbilityId);
     if (ability) {
+      (ability as BaseAbility).setOwner(playerId);
+      (ability as BaseAbility).setAbilityManager(this);
+      
       this.playerAbilities.set(playerId, ability as BaseAbility);
+      console.log(`[ABILITY] Owner 설정 완료: Player ${playerId} -> ${mappedAbilityId}`);
     }
   }
 
@@ -289,5 +292,11 @@ export class AbilityManager {
   // 플레이어 설정
   setPlayer(player: Player): void {
     this.players.set(player.id, player);
+  }
+
+  // 플레이어의 모든 능력 가져오기
+  getPlayerAbilities(playerId: number): BaseAbility[] {
+    const ability = this.playerAbilities.get(playerId);
+    return ability ? [ability] : [];
   }
 } 

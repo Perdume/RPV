@@ -8,11 +8,14 @@ import {
   DamageEvent,
   DefendEvent,
   ModifiableEvent,
-  GameEventType
+  GameEventType,
+  GameSnapshot,
+  GameSessionData
 } from '../types/game.types';
 import { EventSystem } from '../utils/eventSystem';
 import { AbilityManager } from '../abilities/AbilityManager';
 import { Debug } from '../abilities/Debug';
+import { DataManager } from './DataManager';
 
 const DEATH_ZONE_TURN = 5;
 
@@ -129,7 +132,70 @@ export class TurnProcessor {
     }
   }
 
-  public async processTurn(actions: PlayerAction[]): Promise<TurnResult> {
+  // 턴 처리 전 백업
+  async backupCurrentTurn(): Promise<void> {
+    const currentTurn = this.gameState.currentTurn;
+    const backupDir = `src/data/history/Turn_${currentTurn}`;
+    
+    try {
+      // 1. 게임 상태 백업
+      const gameData = await DataManager.loadGameSession();
+      await DataManager.saveGameSnapshot({
+        gameState: gameData,
+        abilityStates: await this.captureAbilityStates(),
+        metadata: {
+          timestamp: Date.now(),
+          turnNumber: currentTurn
+        }
+      });
+      
+      console.log(`Turn ${currentTurn} 백업 완료`);
+    } catch (error) {
+      console.error(`Turn ${currentTurn} 백업 실패:`, error);
+    }
+  }
+
+  // 능력 상태 캡처
+  private async captureAbilityStates(): Promise<Record<string, any>> {
+    const states: Record<string, any> = {};
+    const players = this.gameState.players;
+
+    for (const player of players) {
+      if (player.ability !== '없음') {
+        const ability = this.abilityManager.getPlayerAbility(player.id);
+        if (ability) {
+          states[`${player.id}_${ability.id}`] = await DataManager.loadAbilityData(player.id, ability.id);
+        }
+      }
+    }
+
+    return states;
+  }
+
+  async processTurn(actions: PlayerAction[]): Promise<TurnResult> {
+    // 1. 현재 턴 백업
+    await this.backupCurrentTurn();
+    
+    // 2. 기존 턴 처리 로직
+    const result = await this.processActionsInternal(actions);
+    
+    // 3. 새로운 게임 상태 저장
+    const sessionData: GameSessionData = {
+      players: this.gameState.players,
+      currentTurn: this.gameState.currentTurn,
+      logs: this.gameState.logs,
+      isDeathZone: this.gameState.isDeathZone,
+      turn: this.gameState.turn,
+      survivors: this.gameState.survivors,
+      deathZone: this.gameState.deathZone,
+      currentSession: this.gameState.currentSession
+    };
+    await DataManager.saveGameSession(sessionData);
+    
+    return result;
+  }
+
+  private async processActionsInternal(actions: PlayerAction[]): Promise<TurnResult> {
     const logs: string[] = [];
     const turnNumber = this.gameState.currentTurn + 1;
 

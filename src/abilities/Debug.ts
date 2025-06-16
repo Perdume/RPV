@@ -10,11 +10,16 @@ export class Debug extends BaseAbility {
   }
 
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {
+    console.log(`[DEBUG] this.ownerId 직접 확인: ${this.ownerId}`);
     const owner = this.getOwner();
-    console.log("[ABILITY DEBUG] OWNER: "+ owner);
+    console.log(`[DEBUG] getOwner() 결과: ${owner}`);
+    console.log(`[DEBUG] 공격자: ${event.data.attacker}`);
+    
     if (owner === event.data.attacker) {
       event.data.damage = 10;
+      console.log(`[DEBUG] 데미지 부스트 적용!`);
     }
+    
     this.logEvent('Before Attack', event);
   }
 

@@ -62,6 +62,10 @@ export interface GameState {
   currentTurn: number;
   logs: string[];
   isDeathZone: boolean;
+  turn: number;
+  survivors: Player[];
+  deathZone: boolean;
+  currentSession: string;
 }
 
 export interface TurnResult {
@@ -131,31 +135,23 @@ export interface Ability {
   isActive: boolean;
   cooldown: number;
   maxCooldown: number;
-
-  // Pre/Post 이벤트 핸들러
-  onBeforeAttack?: (event: ModifiableEvent) => Promise<void>;
-  onAfterAttack?: (event: ModifiableEvent) => Promise<void>;
-  onBeforeDefend?: (event: ModifiableEvent) => Promise<void>;
-  onAfterDefend?: (event: ModifiableEvent) => Promise<void>;
-  onBeforeEvade?: (event: ModifiableEvent) => Promise<void>;
-  onAfterEvade?: (event: ModifiableEvent) => Promise<void>;
-  onBeforePass?: (event: ModifiableEvent) => Promise<void>;
-  onAfterPass?: (event: ModifiableEvent) => Promise<void>;
-
-  // 시스템 이벤트 핸들러
-  onTurnStart?: (event: ModifiableEvent) => Promise<void>;
-  onTurnEnd?: (event: ModifiableEvent) => Promise<void>;
-  onGameStart?: (event: ModifiableEvent) => Promise<void>;
-  onGameEnd?: (event: ModifiableEvent) => Promise<void>;
-  onDeath?: (event: ModifiableEvent) => Promise<void>;
-  onPerfectGuard?: (event: ModifiableEvent) => Promise<void>;
-  onFocusAttack?: (event: ModifiableEvent) => Promise<void>;
-
-  // 쿨다운 관리
-  resetCooldown(): void;
-  isOnCooldown(): boolean;
-  getRemainingCooldown(): number;
+  maxUses: number;
   updateCooldown(): void;
+  onBeforeAttack?(event: ModifiableEvent): Promise<void>;
+  onAfterAttack?(event: ModifiableEvent): Promise<void>;
+  onBeforeDefend?(event: ModifiableEvent): Promise<void>;
+  onAfterDefend?(event: ModifiableEvent): Promise<void>;
+  onBeforeEvade?(event: ModifiableEvent): Promise<void>;
+  onAfterEvade?(event: ModifiableEvent): Promise<void>;
+  onBeforePass?(event: ModifiableEvent): Promise<void>;
+  onAfterPass?(event: ModifiableEvent): Promise<void>;
+  onTurnStart?(event: ModifiableEvent): Promise<void>;
+  onTurnEnd?(event: ModifiableEvent): Promise<void>;
+  onGameStart?(event: ModifiableEvent): Promise<void>;
+  onGameEnd?(event: ModifiableEvent): Promise<void>;
+  onDeath?(event: ModifiableEvent): Promise<void>;
+  onPerfectGuard?(event: ModifiableEvent): Promise<void>;
+  onFocusAttack?(event: ModifiableEvent): Promise<void>;
 }
 
 export interface AbilityContext {
@@ -171,16 +167,28 @@ export interface AbilityContext {
 }
 
 export interface GameSessionData {
-  turn: number;
-  survivors: number;
-  deathZone: {
-    stage: number;
-    maxHpReduction: number;
-    nextReduction: number;
-  };
   players: Player[];
-  currentSession: {
-    startTime: string;
-    gameId: string;
+  currentTurn: number;
+  logs: string[];
+  isDeathZone: boolean;
+  turn: number;
+  survivors: Player[];
+  deathZone: boolean;
+  currentSession: string;
+}
+
+export interface AbilityData {
+  playerId: number;
+  abilityId: string;
+  variables: Record<string, any>;
+  lastUpdated: string;
+}
+
+export interface GameSnapshot {
+  gameState: GameState;
+  abilityStates: Record<string, AbilityData>;
+  metadata: {
+    timestamp: number;
+    turnNumber: number;
   };
 } 

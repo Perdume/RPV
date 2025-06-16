@@ -5,6 +5,7 @@ import { TurnProcessor } from './turnProcessor';
 import { EventSystem } from './eventSystem';
 import { GameEventType, ModifiableEvent } from '../types/game.types';
 import { PlayerStatus } from '../types/game.types';
+import { GameState } from '../types/game.types';
 
 // 글로벌 테스트 함수
 declare global {
@@ -30,7 +31,7 @@ window.testEvents = async function() {
     });
   });
 
-  const gameState = {
+  const gameState: GameState = {
     players: [
       {
         id: 1,
@@ -95,7 +96,11 @@ window.testEvents = async function() {
     ],
     currentTurn: 1,
     logs: [],
-    isDeathZone: false
+    isDeathZone: false,
+    turn: 1,
+    survivors: [],
+    deathZone: false,
+    currentSession: 'test-session'
   };
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);
@@ -133,7 +138,7 @@ window.testRollback = async function() {
     });
   });
 
-  const gameState = {
+  const gameState: GameState = {
     players: [
       {
         id: 1,
@@ -198,7 +203,11 @@ window.testRollback = async function() {
     ],
     currentTurn: 1,
     logs: [],
-    isDeathZone: false
+    isDeathZone: false,
+    turn: 1,
+    survivors: [],
+    deathZone: false,
+    currentSession: 'test-session'
   };
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);
@@ -248,7 +257,7 @@ window.testRedo = async function() {
     });
   });
 
-  const gameState = {
+  const gameState: GameState = {
     players: [
       {
         id: 1,
@@ -313,7 +322,11 @@ window.testRedo = async function() {
     ],
     currentTurn: 1,
     logs: [],
-    isDeathZone: false
+    isDeathZone: false,
+    turn: 1,
+    survivors: [],
+    deathZone: false,
+    currentSession: 'test-session'
   };
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);

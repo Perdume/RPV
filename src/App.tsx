@@ -164,7 +164,11 @@ const App: React.FC = () => {
       players,
       currentTurn,
       logs,
-      isDeathZone
+      isDeathZone,
+      turn: currentTurn,
+      survivors: players.filter(p => p.status !== PlayerStatus.DEAD),
+      deathZone: isDeathZone,
+      currentSession: 'game-session'
     };
 
     const turnProcessor = new TurnProcessor(gameState, eventSystem);
