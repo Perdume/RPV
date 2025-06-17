@@ -90,17 +90,32 @@ export interface ModifiableEvent {
   modified: boolean;
 }
 
+export interface GameEvent {
+  type: GameEventType;
+  timestamp: number;
+  data: any;
+}
+
 export enum GameEventType {
-  // 시스템 이벤트
+  // 기본 이벤트
   GAME_START = 'GAME_START',
   GAME_END = 'GAME_END',
   TURN_START = 'TURN_START',
   TURN_END = 'TURN_END',
   DEATH = 'DEATH',
-  PERFECT_GUARD = 'PERFECT_GUARD',
-  FOCUS_ATTACK = 'FOCUS_ATTACK',
   
-  // Pre/Post 이벤트 패턴
+  // 액션 이벤트
+  ATTACK = 'ATTACK',
+  DEFEND = 'DEFEND',
+  EVADE = 'EVADE',
+  ATTACK_ACTION = 'ATTACK_ACTION',
+  DEFEND_ACTION = 'DEFEND_ACTION',
+  EVADE_ACTION = 'EVADE_ACTION',
+  PASS_ACTION = 'PASS_ACTION',
+  ABILITY_USE = 'ABILITY_USE',
+  ABILITY_EFFECT = 'ABILITY_EFFECT',
+  
+  // 전처리/후처리 이벤트
   BEFORE_ATTACK = 'BEFORE_ATTACK',
   AFTER_ATTACK = 'AFTER_ATTACK',
   BEFORE_DEFEND = 'BEFORE_DEFEND',
@@ -110,18 +125,18 @@ export enum GameEventType {
   BEFORE_PASS = 'BEFORE_PASS',
   AFTER_PASS = 'AFTER_PASS',
   
-  // 행동 이벤트
-  ATTACK_ACTION = 'ATTACK_ACTION',
-  DEFEND_ACTION = 'DEFEND_ACTION',
-  EVADE_ACTION = 'EVADE_ACTION',
-  PASS_ACTION = 'PASS_ACTION',
-  ABILITY_USE = 'ABILITY_USE',
-  
-  // 결과 이벤트
+  // 특수 이벤트
+  PERFECT_GUARD = 'PERFECT_GUARD',
+  FOCUS_ATTACK = 'FOCUS_ATTACK',
+  HP_CHANGE = 'HP_CHANGE',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  STAT_CHANGE = 'STAT_CHANGE',
+  DEATH_ZONE = 'DEATH_ZONE',
   DAMAGE_DEALT = 'DAMAGE_DEALT',
   DEFENSE_CONSUMED = 'DEFENSE_CONSUMED',
   EVADE_SUCCESS = 'EVADE_SUCCESS',
-  EVADE_FAIL = 'EVADE_FAIL'
+  EVADE_FAIL = 'EVADE_FAIL',
+  ABILITY_TRIGGER = 'ABILITY_TRIGGER'
 }
 
 export interface GameEvent extends ModifiableEvent {

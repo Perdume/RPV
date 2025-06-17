@@ -1,4 +1,5 @@
-import { GameEvent, GameEventType, AttackEvent, DefendEvent, EvadeEvent, DeathEvent, FocusAttackEvent, HpChangeEvent, StatusChangeEvent, AbilityUseEvent, AbilityEffectEvent } from './events';
+import { GameEventType } from './types/game.types';
+import { GameEvent, AttackEvent, DefendEvent, EvadeEvent, DeathEvent, FocusAttackEvent, HpChangeEvent, StatusChangeEvent, AbilityUseEvent, AbilityEffectEvent } from './events';
 
 export class EventSystem {
   private handlers: Map<GameEventType, Set<(event: GameEvent) => void | Promise<void>>>;

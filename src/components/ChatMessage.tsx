@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameEvent, GameEventType } from '../events';
+import { GameEvent, GameEventType } from '../types/game.types';
 import { Player } from '../types';
 import styled from 'styled-components';
 

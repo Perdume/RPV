@@ -41,26 +41,32 @@ export class Debug extends BaseAbility {
   }
 
   async onBeforeDefend(event: ModifiableEvent): Promise<void> {
+    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
     this.logEvent('Before Defend', event);
   }
 
   async onAfterDefend(event: ModifiableEvent): Promise<void> {
+    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
     this.logEvent('After Defend', event);
   }
 
   async onBeforeEvade(event: ModifiableEvent): Promise<void> {
+    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
     this.logEvent('Before Evade', event);
   }
 
   async onAfterEvade(event: ModifiableEvent): Promise<void> {
+    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
     this.logEvent('After Evade', event);
   }
 
   async onBeforePass(event: ModifiableEvent): Promise<void> {
+    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
     this.logEvent('Before Pass', event);
   }
 
   async onAfterPass(event: ModifiableEvent): Promise<void> {
+    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
     this.logEvent('After Pass', event);
   }
 

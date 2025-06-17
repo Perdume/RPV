@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { GameEvent, GameEventType } from '../events';
+import { GameEvent, GameEventType } from '../types/game.types';
 import { Player } from '../types';
 import { ChatMessage } from './ChatMessage';
 

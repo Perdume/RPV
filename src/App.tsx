@@ -14,6 +14,7 @@ import { useEventTesting } from './utils/manualEventTest';
 import { initFileSystem } from './utils/fsInit';
 import { BackupUtils } from './utils/backupUtils';
 import { Debug } from './abilities/Debug';
+import { ElectronPathDisplay } from './components/ElectronPathDisplay';
 
 interface GameData {
   turn: number;
@@ -202,6 +203,10 @@ const App: React.FC = () => {
             players={players}
             onTurnComplete={handleActionSubmit}
           />
+          
+          {/* 실행 위치 정보 표시 */}
+          <ElectronPathDisplay />
+          
           <LogContainer>
             {logs.map((log, index) => (
               <LogEntry key={index}>{log}</LogEntry>
@@ -306,4 +311,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App; 
+export default App;

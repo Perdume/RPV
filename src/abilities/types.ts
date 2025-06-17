@@ -1,5 +1,5 @@
 import { PlayerId } from '../types';
-import { GameEventType } from '../events';
+import { GameEventType } from '../types/game.types';
 
 export interface AbilityEffect {
   type: string;
