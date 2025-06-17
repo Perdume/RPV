@@ -2,9 +2,8 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('fs/promises');
 const path = require('path');
 
-// ES 모듈에서 __dirname과 __filename 사용을 위한 설정
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// CommonJS 환경에서는 __dirname과 __filename이 자동으로 제공됨
+// ES 모듈 관련 코드 제거
 
 // 개발 모드 확인
 const isDev = process.env.NODE_ENV === 'development';
@@ -79,4 +78,4 @@ ipcMain.handle('fs:ensureDirectory', async (event, dirPath) => {
     console.error(`디렉토리 생성 실패 (${dirPath}):`, error);
     throw error;
   }
-}); 
+});

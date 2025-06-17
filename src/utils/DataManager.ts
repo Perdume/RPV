@@ -1,16 +1,14 @@
 import { PlayerRecord, GameRecord, AbilityRecord } from '../types/records.types';
 import { GameSessionData, AbilityData, GameSnapshot } from '../types/game.types';
 import { initFileSystem } from './fsInit';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 interface FileSystemError extends Error {
   code?: string;
 }
 
 export class DataManager {
-  private static readonly DATA_DIR = path.join(process.cwd(), 'src', 'data');
-  private static readonly ABILITIES_DIR = path.join(DataManager.DATA_DIR, 'abilities');
+  private static readonly DATA_DIR = 'src/data';
+  private static readonly ABILITIES_DIR = `${DataManager.DATA_DIR}/abilities`;
   
   // 저장 큐와 디바운싱
   private static saveQueue = new Set<string>();
@@ -27,8 +25,8 @@ export class DataManager {
 
   private static async initializeDirectories(): Promise<void> {
     try {
-      await fs.mkdir(this.DATA_DIR, { recursive: true });
-      await fs.mkdir(this.ABILITIES_DIR, { recursive: true });
+      await window.fs!.ensureDirectory(this.DATA_DIR);
+      await window.fs!.ensureDirectory(this.ABILITIES_DIR);
     } catch (error) {
       console.error('[DataManager] 디렉토리 초기화 실패:', error);
     }
@@ -51,7 +49,7 @@ export class DataManager {
   private static async processSaveQueue(): Promise<void> {
     const savePromises = Array.from(this.saveQueue).map(async (filePath) => {
       try {
-        const data = await fs.readFile(filePath, 'utf-8');
+        const data = await window.fs!.readFile(filePath, { encoding: 'utf8' });
         const parsedData = JSON.parse(data);
         
         // 파일 크기 검증
@@ -60,7 +58,7 @@ export class DataManager {
           return;
         }
         
-        await fs.writeFile(filePath, JSON.stringify(parsedData, null, 2));
+        await window.fs!.writeFile(filePath, JSON.stringify(parsedData, null, 2), { encoding: 'utf8' });
         console.log(`[DataManager] 저장 완료: ${filePath}`);
       } catch (error) {
         console.error(`[DataManager] 저장 실패: ${filePath}`, error);
@@ -244,15 +242,21 @@ export class DataManager {
   // 게임 스냅샷 저장
   static async saveGameSnapshot(snapshot: GameSnapshot): Promise<void> {
     this.ensureFsInitialized();
+    
+    const key = `snapshot_turn_${snapshot.metadata.turnNumber}`;
+    const content = JSON.stringify(snapshot, null, 2);
+    
     try {
-      const turnNumber = snapshot.metadata.turnNumber;
-      const dir = `src/data/history/Turn_${turnNumber}`;
-      const content = JSON.stringify(snapshot, null, 2);
-      await window.fs!.writeFile(`${dir}/data.json`, content, { encoding: 'utf8' });
+      if (!window.electron?.ipcRenderer) {
+        // 웹 환경: localStorage 사용
+        localStorage.setItem(key, content);
+      } else {
+        // Electron 환경: 파일 저장
+        await window.fs!.writeFile(`src/data/history/${key}.json`, content, { encoding: 'utf8' });
+      }
     } catch (error) {
-      const fsError = error as FileSystemError;
-      console.error('게임 스냅샷 저장 실패:', fsError.message);
-      throw fsError;
+      console.error('게임 스냅샷 저장 실패:', error);
+      throw error;
     }
   }
 
@@ -296,10 +300,20 @@ export class DataManager {
 
   // 능력 데이터 로드
   static async loadAbilityData(playerId: number, abilityId: string): Promise<any> {
-    const filePath = path.join(this.ABILITIES_DIR, `${playerId}_${abilityId}.json`);
+    this.ensureFsInitialized();
+    
+    const fileName = `ability_${playerId}_${abilityId}.json`;
+    
     try {
-      const data = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(data);
+      // 웹 환경에서는 localStorage 사용
+      if (!window.electron?.ipcRenderer) {
+        const stored = localStorage.getItem(fileName);
+        return stored ? JSON.parse(stored) : { variables: {} };
+      }
+      
+      // Electron 환경에서는 파일 시스템 사용
+      const content = await window.fs!.readFile(`src/data/abilities/${fileName}`, { encoding: 'utf8' });
+      return JSON.parse(content);
     } catch (error) {
       console.log(`[DataManager] 새로운 능력 데이터: ${playerId}_${abilityId}`);
       return { variables: {} };
@@ -308,9 +322,26 @@ export class DataManager {
 
   // 능력 데이터 저장
   static async saveAbilityData(playerId: number, abilityId: string, data: any): Promise<void> {
-    const filePath = path.join(this.ABILITIES_DIR, `${playerId}_${abilityId}.json`);
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-    this.queueSave(filePath);
+    this.ensureFsInitialized();
+    
+    const fileName = `ability_${playerId}_${abilityId}.json`;
+    const content = JSON.stringify(data, null, 2);
+    
+    try {
+      // 웹 환경에서는 localStorage 사용
+      if (!window.electron?.ipcRenderer) {
+        localStorage.setItem(fileName, content);
+        console.log(`[DataManager] localStorage 저장: ${fileName}`);
+        return;
+      }
+      
+      // Electron 환경에서는 파일 시스템 사용
+      await window.fs!.writeFile(`src/data/abilities/${fileName}`, content, { encoding: 'utf8' });
+      console.log(`[DataManager] 파일 저장: ${fileName}`);
+    } catch (error) {
+      console.error(`[DataManager] 저장 실패: ${fileName}`, error);
+      throw error;
+    }
   }
 
   // 게임 스냅샷 로드
@@ -320,28 +351,27 @@ export class DataManager {
     const key = `snapshot_turn_${turnNumber}`;
     
     try {
-      if (window.electron?.ipcRenderer) {
-        // Electron 환경: 파일 시스템에서 로드
-        const content = await window.fs!.readFile(`src/data/history/Turn_${turnNumber}/data.json`, { encoding: 'utf8' });
-        return JSON.parse(content);
-      } else {
+      if (!window.electron?.ipcRenderer) {
         // 웹 환경: localStorage에서 로드
         const content = localStorage.getItem(key);
         return content ? JSON.parse(content) : null;
+      } else {
+        // Electron 환경: 파일에서 로드
+        const content = await window.fs!.readFile(`src/data/history/${key}.json`, { encoding: 'utf8' });
+        return JSON.parse(content);
       }
     } catch (error) {
       console.error('게임 스냅샷 로드 실패:', error);
-      // 폴백: localStorage에서 시도
-      const content = localStorage.getItem(key);
-      return content ? JSON.parse(content) : null;
+      return null;
     }
   }
 
   // 능력 데이터 삭제
   static async deleteAbilityData(playerId: number, abilityId: string): Promise<void> {
-    const filePath = path.join(this.ABILITIES_DIR, `${playerId}_${abilityId}.json`);
+    const filePath = `${this.ABILITIES_DIR}/${playerId}_${abilityId}.json`;
     try {
-      await fs.unlink(filePath);
+      // 파일 삭제는 지원하지 않으므로 빈 파일로 덮어쓰기
+      await window.fs!.writeFile(filePath, '', { encoding: 'utf8' });
       console.log(`[DataManager] 데이터 삭제 완료: ${playerId}_${abilityId}`);
     } catch (error) {
       console.error(`[DataManager] 데이터 삭제 실패: ${playerId}_${abilityId}`, error);

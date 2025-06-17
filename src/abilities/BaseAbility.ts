@@ -1,7 +1,7 @@
 import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext } from '../types/game.types';
 import { AbilityManager } from './AbilityManager';
 import { DataManager } from '../utils/DataManager';
-import { VariableSchema } from '../types/game.types';
+import { VariableSchema, schemas } from '../types/game.types';
 
 // 변수 타입 정의
 interface AbilityVariable<T = any> {
@@ -10,26 +10,6 @@ interface AbilityVariable<T = any> {
   lastUpdated: number;
   schema?: VariableSchema<T>;
 }
-
-// 기본 스키마들
-const schemas = {
-  number: {
-    validate: (value: any): value is number => typeof value === 'number',
-    defaultValue: 0
-  },
-  boolean: {
-    validate: (value: any): value is boolean => typeof value === 'boolean',
-    defaultValue: false
-  },
-  string: {
-    validate: (value: any): value is string => typeof value === 'string',
-    defaultValue: ''
-  },
-  array: {
-    validate: (value: any): value is any[] => Array.isArray(value),
-    defaultValue: []
-  }
-};
 
 export abstract class BaseAbility implements Ability {
   id: string;
@@ -233,14 +213,12 @@ export abstract class BaseAbility implements Ability {
       }
     });
     
-    const saveData = {
+    await DataManager.saveAbilityData(this.ownerId, this.id, {
       playerId: this.ownerId,
       abilityId: this.id,
       variables: permanentVars,
       lastUpdated: new Date().toISOString()
-    };
-    
-    await DataManager.saveAbilityData(this.ownerId, this.id, saveData);
+    });
   }
 
   // === 변수 디버깅 도구 ===

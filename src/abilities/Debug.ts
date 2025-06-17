@@ -157,4 +157,66 @@ export class Debug extends BaseAbility {
     this.clearLogs();
     console.log('[DEBUG] 모든 통계가 리셋되었습니다.');
   }
+
+  // 변수 테스트
+  async testVariables(): Promise<void> {
+    console.group('=== 변수 테스트 시작 ===');
+    
+    // 1. 영구 변수 테스트
+    console.log('\n1. 영구 변수 테스트');
+    await this.setPermanent('test_number', 42, schemas.number);
+    await this.setPermanent('test_string', 'Hello', schemas.string);
+    await this.setPermanent('test_boolean', true, schemas.boolean);
+    await this.setPermanent('test_array', ['a', 'b', 'c'], schemas.array);
+    
+    // 2. 세션 변수 테스트
+    console.log('\n2. 세션 변수 테스트');
+    this.setSession('session_number', 100, schemas.number);
+    this.setSession('session_string', 'World', schemas.string);
+    this.setSession('session_boolean', false, schemas.boolean);
+    this.setSession('session_array', [1, 2, 3], schemas.array);
+    
+    // 3. 턴 변수 테스트
+    console.log('\n3. 턴 변수 테스트');
+    const currentTurn = 1;
+    this.setTurn('turn_number', 999, currentTurn, schemas.number);
+    this.setTurn('turn_string', 'Turn Test', currentTurn, schemas.string);
+    this.setTurn('turn_boolean', true, currentTurn, schemas.boolean);
+    this.setTurn('turn_array', ['x', 'y', 'z'], currentTurn, schemas.array);
+    
+    // 4. 변수 읽기 테스트
+    console.log('\n4. 변수 읽기 테스트');
+    console.log('영구 변수:', {
+      number: this.getPermanent('test_number', schemas.number),
+      string: this.getPermanent('test_string', schemas.string),
+      boolean: this.getPermanent('test_boolean', schemas.boolean),
+      array: this.getPermanent('test_array', schemas.array)
+    });
+    
+    console.log('세션 변수:', {
+      number: this.getSession('session_number', schemas.number),
+      string: this.getSession('session_string', schemas.string),
+      boolean: this.getSession('session_boolean', schemas.boolean),
+      array: this.getSession('session_array', schemas.array)
+    });
+    
+    console.log('턴 변수:', {
+      number: this.getTurn('turn_number', currentTurn, schemas.number),
+      string: this.getTurn('turn_string', currentTurn, schemas.string),
+      boolean: this.getTurn('turn_boolean', currentTurn, schemas.boolean),
+      array: this.getTurn('turn_array', currentTurn, schemas.array)
+    });
+    
+    // 5. 턴 변수 정리 테스트
+    console.log('\n5. 턴 변수 정리 테스트');
+    this.cleanupTurnVariables(currentTurn);
+    console.log('정리 후 턴 변수:', {
+      number: this.getTurn('turn_number', currentTurn, schemas.number),
+      string: this.getTurn('turn_string', currentTurn, schemas.string),
+      boolean: this.getTurn('turn_boolean', currentTurn, schemas.boolean),
+      array: this.getTurn('turn_array', currentTurn, schemas.array)
+    });
+    
+    console.groupEnd();
+  }
 } 

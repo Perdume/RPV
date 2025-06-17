@@ -283,23 +283,23 @@ const App: React.FC = () => {
           📁 백업 상세
         </button>
         <button 
-          onClick={() => {
+          onClick={async () => {
             const debug = abilityManager.getPlayerAbility(1); // 디버거 플레이어
             if (debug instanceof Debug) {
-              debug.printStatus();
+              await debug.testVariables();
             }
           }}
           style={{
             padding: '8px 16px',
             margin: '4px',
-            backgroundColor: '#FF5722',
+            backgroundColor: '#9C27B0',
             color: 'white',
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer'
           }}
         >
-          🐛 Debug 상태
+          🧪 변수 테스트
         </button>
       </div>
     </>
