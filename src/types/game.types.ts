@@ -186,4 +186,30 @@ export interface GameSnapshot {
     timestamp: number;
     turnNumber: number;
   };
-} 
+}
+
+// 변수 스키마 인터페이스
+export interface VariableSchema<T> {
+  validate(value: any): value is T;
+  defaultValue?: T;
+}
+
+// 기본 스키마들
+export const schemas = {
+  number: {
+    validate: (value: any): value is number => typeof value === 'number',
+    defaultValue: 0
+  },
+  boolean: {
+    validate: (value: any): value is boolean => typeof value === 'boolean',
+    defaultValue: false
+  },
+  string: {
+    validate: (value: any): value is string => typeof value === 'string',
+    defaultValue: ''
+  },
+  array: {
+    validate: (value: any): value is any[] => Array.isArray(value),
+    defaultValue: [] as any[]
+  }
+} as const; 

@@ -1,12 +1,76 @@
 import { PlayerRecord, GameRecord, AbilityRecord } from '../types/records.types';
 import { GameSessionData, AbilityData, GameSnapshot } from '../types/game.types';
 import { initFileSystem } from './fsInit';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 interface FileSystemError extends Error {
   code?: string;
 }
 
 export class DataManager {
+  private static readonly DATA_DIR = path.join(process.cwd(), 'src', 'data');
+  private static readonly ABILITIES_DIR = path.join(DataManager.DATA_DIR, 'abilities');
+  
+  // 저장 큐와 디바운싱
+  private static saveQueue = new Set<string>();
+  private static saveTimeout: NodeJS.Timeout | null = null;
+  private static readonly DEBOUNCE_DELAY = 1000; // 1초
+
+  // 파일 크기 제한
+  private static readonly MAX_FILE_SIZE = 1024 * 1024; // 1MB
+
+  static {
+    // 디렉토리 초기화
+    this.initializeDirectories();
+  }
+
+  private static async initializeDirectories(): Promise<void> {
+    try {
+      await fs.mkdir(this.DATA_DIR, { recursive: true });
+      await fs.mkdir(this.ABILITIES_DIR, { recursive: true });
+    } catch (error) {
+      console.error('[DataManager] 디렉토리 초기화 실패:', error);
+    }
+  }
+
+  // 저장 요청을 큐에 추가하고 디바운싱
+  private static queueSave(filePath: string): void {
+    this.saveQueue.add(filePath);
+    
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    
+    this.saveTimeout = setTimeout(() => {
+      this.processSaveQueue();
+    }, this.DEBOUNCE_DELAY);
+  }
+
+  // 큐에 있는 모든 저장 요청 처리
+  private static async processSaveQueue(): Promise<void> {
+    const savePromises = Array.from(this.saveQueue).map(async (filePath) => {
+      try {
+        const data = await fs.readFile(filePath, 'utf-8');
+        const parsedData = JSON.parse(data);
+        
+        // 파일 크기 검증
+        if (JSON.stringify(parsedData).length > this.MAX_FILE_SIZE) {
+          console.error(`[DataManager] 파일 크기 초과: ${filePath}`);
+          return;
+        }
+        
+        await fs.writeFile(filePath, JSON.stringify(parsedData, null, 2));
+        console.log(`[DataManager] 저장 완료: ${filePath}`);
+      } catch (error) {
+        console.error(`[DataManager] 저장 실패: ${filePath}`, error);
+      }
+    });
+    
+    await Promise.all(savePromises);
+    this.saveQueue.clear();
+  }
+
   private static ensureFsInitialized() {
     if (!window.fs) {
       initFileSystem();
@@ -232,34 +296,55 @@ export class DataManager {
 
   // 능력 데이터 로드
   static async loadAbilityData(playerId: number, abilityId: string): Promise<any> {
-    this.ensureFsInitialized();
-    
-    const filePath = `src/data/abilities/player_${playerId}_${abilityId}.json`;
-    
+    const filePath = path.join(this.ABILITIES_DIR, `${playerId}_${abilityId}.json`);
     try {
-      const content = await window.fs!.readFile(filePath, { encoding: 'utf8' });
-      return JSON.parse(content);
+      const data = await fs.readFile(filePath, 'utf-8');
+      return JSON.parse(data);
     } catch (error) {
-      // 파일이 없는 경우 기본 데이터 생성
-      const defaultData = { variables: {} };
-      await this.saveAbilityData(playerId, abilityId, defaultData);
-      return defaultData;
+      console.log(`[DataManager] 새로운 능력 데이터: ${playerId}_${abilityId}`);
+      return { variables: {} };
     }
   }
 
   // 능력 데이터 저장
   static async saveAbilityData(playerId: number, abilityId: string, data: any): Promise<void> {
+    const filePath = path.join(this.ABILITIES_DIR, `${playerId}_${abilityId}.json`);
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+    this.queueSave(filePath);
+  }
+
+  // 게임 스냅샷 로드
+  static async loadGameSnapshot(turnNumber: number): Promise<GameSnapshot | null> {
     this.ensureFsInitialized();
     
-    const filePath = `src/data/abilities/player_${playerId}_${abilityId}.json`;
+    const key = `snapshot_turn_${turnNumber}`;
     
     try {
-      const content = JSON.stringify(data, null, 2);
-      await window.fs!.writeFile(filePath, content, { encoding: 'utf8' });
+      if (window.electron?.ipcRenderer) {
+        // Electron 환경: 파일 시스템에서 로드
+        const content = await window.fs!.readFile(`src/data/history/Turn_${turnNumber}/data.json`, { encoding: 'utf8' });
+        return JSON.parse(content);
+      } else {
+        // 웹 환경: localStorage에서 로드
+        const content = localStorage.getItem(key);
+        return content ? JSON.parse(content) : null;
+      }
     } catch (error) {
-      console.error('능력 데이터 저장 실패:', error);
-      // 웹 환경에서는 localStorage 사용
-      localStorage.setItem(`ability:${playerId}:${abilityId}`, JSON.stringify(data));
+      console.error('게임 스냅샷 로드 실패:', error);
+      // 폴백: localStorage에서 시도
+      const content = localStorage.getItem(key);
+      return content ? JSON.parse(content) : null;
+    }
+  }
+
+  // 능력 데이터 삭제
+  static async deleteAbilityData(playerId: number, abilityId: string): Promise<void> {
+    const filePath = path.join(this.ABILITIES_DIR, `${playerId}_${abilityId}.json`);
+    try {
+      await fs.unlink(filePath);
+      console.log(`[DataManager] 데이터 삭제 완료: ${playerId}_${abilityId}`);
+    } catch (error) {
+      console.error(`[DataManager] 데이터 삭제 실패: ${playerId}_${abilityId}`, error);
     }
   }
 } 

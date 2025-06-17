@@ -12,6 +12,8 @@ import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
 import { useEventTesting } from './utils/manualEventTest';
 import { initFileSystem } from './utils/fsInit';
+import { BackupUtils } from './utils/backupUtils';
+import { Debug } from './abilities/Debug';
 
 interface GameData {
   turn: number;
@@ -251,6 +253,53 @@ const App: React.FC = () => {
           }}
         >
           ⏩ 다시실행 테스트
+        </button>
+        <button 
+          onClick={() => BackupUtils.monitorBackupStatus()}
+          style={{
+            padding: '8px 16px',
+            margin: '4px',
+            backgroundColor: '#9C27B0',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          📊 백업 상태
+        </button>
+        <button 
+          onClick={() => BackupUtils.getDetailedBackupInfo()}
+          style={{
+            padding: '8px 16px',
+            margin: '4px',
+            backgroundColor: '#795548',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          📁 백업 상세
+        </button>
+        <button 
+          onClick={() => {
+            const debug = abilityManager.getPlayerAbility(1); // 디버거 플레이어
+            if (debug instanceof Debug) {
+              debug.printStatus();
+            }
+          }}
+          style={{
+            padding: '8px 16px',
+            margin: '4px',
+            backgroundColor: '#FF5722',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          🐛 Debug 상태
         </button>
       </div>
     </>

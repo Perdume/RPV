@@ -103,6 +103,16 @@ export class AbilityManager {
   }
 
   private async handleTurnEnd(event: ModifiableEvent): Promise<void> {
+    const turnNumber = event.data.turn;
+    
+    // 모든 능력의 턴 변수 정리
+    for (const ability of this.playerAbilities.values()) {
+      if (ability instanceof BaseAbility) {
+        ability.cleanupTurnVariables(turnNumber);
+      }
+    }
+    
+    // 기존 턴 종료 로직
     for (const ability of this.abilities.values()) {
       if (ability.isActive) {
         await ability.onTurnEnd?.(event);
