@@ -105,14 +105,16 @@ export class TurnProcessor {
       const hasNoHpChange = startHp !== undefined && startHp === player.hp;
       const hasDefenseGaugeSpace = player.defenseGauge < player.maxDefenseGauge;
       const wasAttackedThisTurn = player.wasAttacked;
+      const hasDefended = player.hasDefended;
       
       this.addDebugLog(`[퍼펙트 가드] ${player.name} 조건 확인:`);
       this.addDebugLog(`  - 체력 변화 없음: ${hasNoHpChange}`);
       this.addDebugLog(`  - 방어 게이지 여유 있음: ${hasDefenseGaugeSpace}`);
       this.addDebugLog(`  - 이번 턴에 공격받음: ${wasAttackedThisTurn}`);
+      this.addDebugLog(`  - 방어를 사용함: ${hasDefended}`);
       
-      // 퍼펙트 가드 조건: 체력 변화가 없고, 방어 게이지가 최대가 아니며, 이번 턴에 공격을 받았을 때
-      if (hasNoHpChange && hasDefenseGaugeSpace && wasAttackedThisTurn) {
+      // 퍼펙트 가드 조건: [방어 선택] + [공격받음] + [체력 변화 없음]
+      if (hasDefended && wasAttackedThisTurn && hasNoHpChange && hasDefenseGaugeSpace) {
         this.addDebugLog(`[퍼펙트 가드] ${player.name}에게 퍼펙트 가드가 적용됩니다!`);
         
         // 방어 게이지 증가
@@ -143,14 +145,17 @@ export class TurnProcessor {
         this.addDebugLog(`[퍼펙트 가드] ${player.name}는 퍼펙트 가드 조건을 만족하지 않습니다.`);
         
         // 조건별 상세 로그
+        if (!hasDefended) {
+          this.addDebugLog(`  - 이유: 방어를 사용하지 않았습니다`);
+        }
+        if (!wasAttackedThisTurn) {
+          this.addDebugLog(`  - 이유: 이번 턴에 공격을 받지 않았습니다`);
+        }
         if (!hasNoHpChange) {
           this.addDebugLog(`  - 이유: 체력이 변화했습니다 (${startHp} → ${player.hp})`);
         }
         if (!hasDefenseGaugeSpace) {
           this.addDebugLog(`  - 이유: 방어 게이지가 최대입니다 (${player.defenseGauge}/${player.maxDefenseGauge})`);
-        }
-        if (!wasAttackedThisTurn) {
-          this.addDebugLog(`  - 이유: 이번 턴에 공격을 받지 않았습니다`);
         }
       }
     });
@@ -327,7 +332,8 @@ export class TurnProcessor {
         continue;
       }
 
-      // 디버그 로그 추가
+      // 액션 타입 설정
+      player.actionType = action.actionType;
       this.addDebugLog(`[액션 처리] ${player.name}의 ${action.actionType} 액션을 처리합니다.`);
 
       switch (action.actionType) {
@@ -345,6 +351,29 @@ export class TurnProcessor {
           break;
       }
     }
+
+    // 회피카운트 변화 로직 추가
+    this.addDebugLog('[회피카운트] 모든 액션 처리 후 회피카운트 변화를 적용합니다.');
+    this.gameState.players.forEach(player => {
+      if (player.status === PlayerStatus.DEAD) return;
+      
+      const oldEvadeCount = player.evadeCount;
+      
+      if (player.actionType === 'EVADE') {
+        // +1 (이미 processEvade에서 처리됨)
+        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} (회피 선택으로 +1)`);
+      } else if (player.actionType === 'DEFEND') {
+        // +0 (변화 없음)
+        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} (방어 선택으로 변화 없음)`);
+      } else {
+        // 그외: -1
+        player.evadeCount = Math.max(0, player.evadeCount - 1);
+        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} → ${player.evadeCount} (그외 액션으로 -1)`);
+        if (oldEvadeCount !== player.evadeCount) {
+          logs.push(`${player.name}의 회피카운트가 감소했습니다. (현재 회피카운트: ${player.evadeCount})`);
+        }
+      }
+    });
   }
 
   private async processAttack(attacker: Player, target: Player, logs: string[]): Promise<void> {
@@ -370,6 +399,28 @@ export class TurnProcessor {
     // 타겟이 공격을 받았음을 표시
     target.wasAttacked = true;
     this.addDebugLog(`[공격 처리] ${target.name}의 wasAttacked 플래그를 true로 설정합니다.`);
+
+    // 방어 체크 - 방어 선택 시 공격을 확정적으로 무효화
+    if (target.hasDefended && target.defenseGauge > 0) {
+      this.addDebugLog(`[공격 처리] ${target.name}이(가) 방어로 공격을 무효화합니다.`);
+      target.defenseGauge--;
+      logs.push(`${target.name}이(가) 방어로 공격을 무효화했습니다!`);
+      
+      // 방어 이벤트 발생
+      const defendEvent: ModifiableEvent = {
+        type: GameEventType.DEFEND_ACTION,
+        timestamp: Date.now(),
+        data: {
+          player: target.id,
+          defenseGauge: target.defenseGauge,
+          damageReduction: 1
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(defendEvent);
+      return; // 데미지 없음
+    }
 
     // Before Evade 이벤트 발생
     const beforeEvadeEvent: ModifiableEvent = {
