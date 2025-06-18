@@ -9,6 +9,8 @@ export class Debug extends BaseAbility {
 
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {
     const owner = this.getOwner();
+    if (!owner) return;
+    
     console.log(`[DEBUG] Owner: ${owner}, 공격자: ${event.data.attacker}`);
     
     if (owner === event.data.attacker) {
@@ -16,58 +18,75 @@ export class Debug extends BaseAbility {
       const attackCount = this.getPermanent<number>('attack_count', schemas.number);
       await this.setPermanent('attack_count', attackCount + 1, schemas.number);
       
+      console.log(`[디버그로거] 타겟: ${event.data.target}`);
+      if(event.data.target == 2) {
+        // 3번 플레이어로 타겟 변경
+        const players = this.getSession<number[]>('players', schemas.array);
+        const targetPlayer = players.find(p => p == 3);
+        if (targetPlayer) {
+          event.data.target = {
+            id: 3,
+            name: `Player ${3}`,
+            health: event.data.target.health
+          };
+        }
+        console.log(`[디버그로거] 타겟 변경: ${event.data.target} -> ${targetPlayer}`);
+      }
+      
       // 이번 턴 공격 여부 (턴 변수)
       this.setTurn('attacked_this_turn', true, event.data.turn || 0, schemas.boolean);
       
       // 데미지 부스트 (세션 변수)
-      const currentBoost = this.getSession<number>('damage_boost', schemas.number);
-      event.data.damage = event.data.damage * currentBoost;
-      
-      console.log(`[DEBUG] 데미지 부스트 적용! (${currentBoost}배)`);
-      console.log(`[DEBUG] 총 공격 횟수: ${attackCount + 1}회`);
+      event.data.damage = 10;
     }
     
-    this.logEvent('Before Attack', event);
   }
 
   async onAfterAttack(event: ModifiableEvent): Promise<void> {
+    const owner = this.getOwner();
+    if (!owner) return;
+
     // 공격 성공 시 부스트 증가
-    if (this.getOwner() === event.data.attacker) {
+    if (owner === event.data.attacker) {
       const currentBoost = this.getSession<number>('damage_boost', schemas.number);
       this.setSession('damage_boost', currentBoost + 0.1, schemas.number);
     }
     
-    this.logEvent('After Attack', event);
   }
 
   async onBeforeDefend(event: ModifiableEvent): Promise<void> {
-    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
-    this.logEvent('Before Defend', event);
+    const owner = this.getOwner();
+    if (!owner) return;
   }
 
   async onAfterDefend(event: ModifiableEvent): Promise<void> {
-    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
-    this.logEvent('After Defend', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+  
   }
 
   async onBeforeEvade(event: ModifiableEvent): Promise<void> {
-    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
-    this.logEvent('Before Evade', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onAfterEvade(event: ModifiableEvent): Promise<void> {
-    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
-    this.logEvent('After Evade', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onBeforePass(event: ModifiableEvent): Promise<void> {
-    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
-    this.logEvent('Before Pass', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onAfterPass(event: ModifiableEvent): Promise<void> {
-    const _owner = this.getOwner(); // 의도적으로 사용하지 않는 변수
-    this.logEvent('After Pass', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onTurnStart(event: ModifiableEvent): Promise<void> {
@@ -84,10 +103,12 @@ export class Debug extends BaseAbility {
       console.log(`[DEBUG] 로그 정리: ${logs.length - maxLogs}개 삭제`);
     }
 
-    this.logEvent('Turn Start', event);
   }
 
   async onTurnEnd(event: ModifiableEvent): Promise<void> {
+    const owner = this.getOwner();
+    if (!owner) return;
+
     const turnNumber = event.data.turn;
     
     // 이번 턴 공격 여부 확인
@@ -99,27 +120,36 @@ export class Debug extends BaseAbility {
     // 턴 변수 정리
     this.cleanupTurnVariables(turnNumber);
     
-    this.logEvent('Turn End', event);
   }
 
   async onGameStart(event: ModifiableEvent): Promise<void> {
-    this.logEvent('Game Start', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onGameEnd(event: ModifiableEvent): Promise<void> {
-    this.logEvent('Game End', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onDeath(event: ModifiableEvent): Promise<void> {
-    this.logEvent('Death', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onPerfectGuard(event: ModifiableEvent): Promise<void> {
-    this.logEvent('Perfect Guard', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   async onFocusAttack(event: ModifiableEvent): Promise<void> {
-    this.logEvent('Focus Attack', event);
+    const owner = this.getOwner();
+    if (!owner) return;
+    
   }
 
   // 로그 관리
@@ -132,7 +162,6 @@ export class Debug extends BaseAbility {
     logs.push(debugMessage);
     this.setSession('debug_logs', logs, schemas.array);
     
-    console.log(debugMessage);
   }
 
   // 모든 변수 상태 출력

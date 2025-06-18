@@ -75,11 +75,22 @@ export class DataManager {
     }
   }
 
+  private static getDataPath() {
+    return window.electron?.ipcRenderer ? 'data' : 'src/data';
+  }
+
+  private static async ensureDirectory(path: string) {
+    await this.ensureFsInitialized();
+    await window.fs!.ensureDirectory(path);
+  }
+
   // 게임 세션 데이터 로드
   static async loadGameSession(): Promise<GameSessionData> {
-    this.ensureFsInitialized();
+    await this.ensureFsInitialized();
+    const dataPath = this.getDataPath();
+    
     try {
-      const content = await window.fs!.readFile('Data/data.json', { encoding: 'utf8' });
+      const content = await window.fs!.readFile(`${dataPath}/data.json`, { encoding: 'utf8' });
       return JSON.parse(content);
     } catch (error) {
       const fsError = error as FileSystemError;
@@ -100,14 +111,18 @@ export class DataManager {
 
   // 게임 세션 데이터 저장
   static async saveGameSession(data: GameSessionData): Promise<void> {
-    this.ensureFsInitialized();
+    await this.ensureFsInitialized();
+    const dataPath = this.getDataPath();
+    
     try {
+      await this.ensureDirectory(dataPath);
       const content = JSON.stringify(data, null, 2);
-      await window.fs!.writeFile('Data/data.json', content, { encoding: 'utf8' });
+      await window.fs!.writeFile(`${dataPath}/data.json`, content, { encoding: 'utf8' });
+      console.log(`✅ 게임 세션 저장 성공: ${dataPath}/data.json`);
     } catch (error) {
-      const fsError = error as FileSystemError;
-      console.error('게임 세션 저장 실패:', fsError.message);
-      throw fsError;
+      console.error(`❌ 게임 세션 저장 실패: ${dataPath}/data.json`, error);
+      // 폴백: localStorage 사용
+      localStorage.setItem('fallback_game_session', JSON.stringify(data));
     }
   }
 
@@ -241,22 +256,26 @@ export class DataManager {
 
   // 게임 스냅샷 저장
   static async saveGameSnapshot(snapshot: GameSnapshot): Promise<void> {
-    this.ensureFsInitialized();
-    
+    await this.ensureFsInitialized();
+    const dataPath = this.getDataPath();
     const key = `snapshot_turn_${snapshot.metadata.turnNumber}`;
     const content = JSON.stringify(snapshot, null, 2);
     
     try {
-      if (!window.electron?.ipcRenderer) {
+      if (window.electron?.ipcRenderer) {
+        // Electron 환경: 파일 저장
+        await this.ensureDirectory(`${dataPath}/history`);
+        await window.fs!.writeFile(`${dataPath}/history/${key}.json`, content, { encoding: 'utf8' });
+        console.log(`✅ 스냅샷 저장 성공: ${key}`);
+      } else {
         // 웹 환경: localStorage 사용
         localStorage.setItem(key, content);
-      } else {
-        // Electron 환경: 파일 저장
-        await window.fs!.writeFile(`src/data/history/${key}.json`, content, { encoding: 'utf8' });
+        console.log(`✅ localStorage 저장: ${key}`);
       }
     } catch (error) {
-      console.error('게임 스냅샷 저장 실패:', error);
-      throw error;
+      console.error(`❌ 스냅샷 저장 실패: ${key}`, error);
+      // 폴백: localStorage 사용
+      localStorage.setItem(`fallback_${key}`, content);
     }
   }
 
@@ -300,20 +319,20 @@ export class DataManager {
 
   // 능력 데이터 로드
   static async loadAbilityData(playerId: number, abilityId: string): Promise<any> {
-    this.ensureFsInitialized();
-    
+    await this.ensureFsInitialized();
+    const dataPath = this.getDataPath();
     const fileName = `ability_${playerId}_${abilityId}.json`;
     
     try {
-      // 웹 환경에서는 localStorage 사용
-      if (!window.electron?.ipcRenderer) {
-        const stored = localStorage.getItem(fileName);
-        return stored ? JSON.parse(stored) : { variables: {} };
+      // Electron 환경에서는 파일 시스템 사용
+      if (window.electron?.ipcRenderer) {
+        const content = await window.fs!.readFile(`${dataPath}/abilities/${fileName}`, { encoding: 'utf8' });
+        return JSON.parse(content);
       }
       
-      // Electron 환경에서는 파일 시스템 사용
-      const content = await window.fs!.readFile(`src/data/abilities/${fileName}`, { encoding: 'utf8' });
-      return JSON.parse(content);
+      // 웹 환경에서는 localStorage 사용
+      const stored = localStorage.getItem(fileName);
+      return stored ? JSON.parse(stored) : { variables: {} };
     } catch (error) {
       console.log(`[DataManager] 새로운 능력 데이터: ${playerId}_${abilityId}`);
       return { variables: {} };
@@ -322,46 +341,47 @@ export class DataManager {
 
   // 능력 데이터 저장
   static async saveAbilityData(playerId: number, abilityId: string, data: any): Promise<void> {
-    this.ensureFsInitialized();
-    
+    await this.ensureFsInitialized();
+    const dataPath = this.getDataPath();
     const fileName = `ability_${playerId}_${abilityId}.json`;
     const content = JSON.stringify(data, null, 2);
     
     try {
-      // 웹 환경에서는 localStorage 사용
-      if (!window.electron?.ipcRenderer) {
+      if (window.electron?.ipcRenderer) {
+        // Electron 환경: 파일 저장
+        await this.ensureDirectory(`${dataPath}/abilities`);
+        await window.fs!.writeFile(`${dataPath}/abilities/${fileName}`, content, { encoding: 'utf8' });
+        console.log(`✅ 능력 데이터 저장 성공: ${fileName}`);
+      } else {
+        // 웹 환경: localStorage 사용
         localStorage.setItem(fileName, content);
-        console.log(`[DataManager] localStorage 저장: ${fileName}`);
-        return;
+        console.log(`✅ localStorage 저장: ${fileName}`);
       }
-      
-      // Electron 환경에서는 파일 시스템 사용
-      await window.fs!.writeFile(`src/data/abilities/${fileName}`, content, { encoding: 'utf8' });
-      console.log(`[DataManager] 파일 저장: ${fileName}`);
     } catch (error) {
-      console.error(`[DataManager] 저장 실패: ${fileName}`, error);
-      throw error;
+      console.error(`❌ 저장 실패: ${fileName}`, error);
+      // 폴백: localStorage 사용
+      localStorage.setItem(`fallback_${fileName}`, content);
     }
   }
 
   // 게임 스냅샷 로드
   static async loadGameSnapshot(turnNumber: number): Promise<GameSnapshot | null> {
-    this.ensureFsInitialized();
-    
+    await this.ensureFsInitialized();
+    const dataPath = this.getDataPath();
     const key = `snapshot_turn_${turnNumber}`;
     
     try {
-      if (!window.electron?.ipcRenderer) {
+      if (window.electron?.ipcRenderer) {
+        // Electron 환경: 파일에서 로드
+        const content = await window.fs!.readFile(`${dataPath}/history/${key}.json`, { encoding: 'utf8' });
+        return JSON.parse(content);
+      } else {
         // 웹 환경: localStorage에서 로드
         const content = localStorage.getItem(key);
         return content ? JSON.parse(content) : null;
-      } else {
-        // Electron 환경: 파일에서 로드
-        const content = await window.fs!.readFile(`src/data/history/${key}.json`, { encoding: 'utf8' });
-        return JSON.parse(content);
       }
     } catch (error) {
-      console.error('게임 스냅샷 로드 실패:', error);
+      console.error(`❌ 스냅샷 로드 실패: ${key}`, error);
       return null;
     }
   }

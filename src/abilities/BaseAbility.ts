@@ -104,7 +104,6 @@ export abstract class BaseAbility implements Ability {
     };
     
     this.variables.set(`sess_${key}`, variable);
-    console.log(`[${this.id}] 세션 변수 저장: ${key} = ${JSON.stringify(value)}`);
   }
 
   protected getSession<T>(key: string, schema?: VariableSchema<T>): T {

@@ -87,23 +87,75 @@ export class TurnProcessor {
 
   private async checkPerfectGuard(): Promise<void> {
     // 턴 종료 시 퍼펙트 가드 체크
+    this.addDebugLog('[퍼펙트 가드] 턴 종료 시 퍼펙트 가드 조건을 확인합니다.');
+    
     this.gameState.players.forEach(player => {
       const startHp = this.lastTurnHpChanges.get(player.id);
-      if (startHp !== undefined && startHp === player.hp) {
-        // 체력 변화가 없고 방어게이지가 최대가 아닌 경우
-        if (player.defenseGauge < 3) {
-          player.defenseGauge++;
-          const event: ModifiableEvent = {
-            type: GameEventType.PERFECT_GUARD,
-            timestamp: Date.now(),
-            data: { player: player.id },
-            cancelled: false,
-            modified: false
-          };
-          this.eventSystem.emit(event);
+      
+      // 디버그 로그: 플레이어별 체력 변화 확인
+      this.addDebugLog(`[퍼펙트 가드] ${player.name} (ID: ${player.id}) 체력 변화 확인:`);
+      this.addDebugLog(`  - 턴 시작 시 체력: ${startHp}`);
+      this.addDebugLog(`  - 현재 체력: ${player.hp}`);
+      this.addDebugLog(`  - 체력 변화: ${startHp !== undefined ? (player.hp - startHp) : '알 수 없음'}`);
+      this.addDebugLog(`  - 현재 방어 게이지: ${player.defenseGauge}/${player.maxDefenseGauge}`);
+      this.addDebugLog(`  - 공격을 받았는가: ${player.wasAttacked}`);
+      this.addDebugLog(`  - 방어를 사용했는가: ${player.hasDefended}`);
+      
+      // 퍼펙트 가드 조건 확인
+      const hasNoHpChange = startHp !== undefined && startHp === player.hp;
+      const hasDefenseGaugeSpace = player.defenseGauge < player.maxDefenseGauge;
+      const wasAttackedThisTurn = player.wasAttacked;
+      
+      this.addDebugLog(`[퍼펙트 가드] ${player.name} 조건 확인:`);
+      this.addDebugLog(`  - 체력 변화 없음: ${hasNoHpChange}`);
+      this.addDebugLog(`  - 방어 게이지 여유 있음: ${hasDefenseGaugeSpace}`);
+      this.addDebugLog(`  - 이번 턴에 공격받음: ${wasAttackedThisTurn}`);
+      
+      // 퍼펙트 가드 조건: 체력 변화가 없고, 방어 게이지가 최대가 아니며, 이번 턴에 공격을 받았을 때
+      if (hasNoHpChange && hasDefenseGaugeSpace && wasAttackedThisTurn) {
+        this.addDebugLog(`[퍼펙트 가드] ${player.name}에게 퍼펙트 가드가 적용됩니다!`);
+        
+        // 방어 게이지 증가
+        const oldDefenseGauge = player.defenseGauge;
+        player.defenseGauge++;
+        
+        this.addDebugLog(`[퍼펙트 가드] ${player.name} 방어 게이지 증가: ${oldDefenseGauge} → ${player.defenseGauge}`);
+        
+        // 퍼펙트 가드 이벤트 발생
+        const event: ModifiableEvent = {
+          type: GameEventType.PERFECT_GUARD,
+          timestamp: Date.now(),
+          data: { 
+            player: player.id,
+            playerName: player.name,
+            oldDefenseGauge,
+            newDefenseGauge: player.defenseGauge,
+            startHp,
+            currentHp: player.hp
+          },
+          cancelled: false,
+          modified: false
+        };
+        
+        this.addDebugLog(`[퍼펙트 가드] ${player.name}에 대한 퍼펙트 가드 이벤트를 발생시킵니다.`);
+        this.eventSystem.emit(event);
+      } else {
+        this.addDebugLog(`[퍼펙트 가드] ${player.name}는 퍼펙트 가드 조건을 만족하지 않습니다.`);
+        
+        // 조건별 상세 로그
+        if (!hasNoHpChange) {
+          this.addDebugLog(`  - 이유: 체력이 변화했습니다 (${startHp} → ${player.hp})`);
+        }
+        if (!hasDefenseGaugeSpace) {
+          this.addDebugLog(`  - 이유: 방어 게이지가 최대입니다 (${player.defenseGauge}/${player.maxDefenseGauge})`);
+        }
+        if (!wasAttackedThisTurn) {
+          this.addDebugLog(`  - 이유: 이번 턴에 공격을 받지 않았습니다`);
         }
       }
     });
+    
+    this.addDebugLog('[퍼펙트 가드] 모든 플레이어의 퍼펙트 가드 확인이 완료되었습니다.');
   }
 
   private async syncGameState(): Promise<void> {
@@ -201,6 +253,13 @@ export class TurnProcessor {
     logs.push(`입력된 행동 수: ${actions.length}`);
     logs.push(`현재 생존자 수: ${this.gameState.players.filter(p => p.status !== PlayerStatus.DEAD).length}`);
 
+    // 턴 시작 시 플래그 초기화
+    this.gameState.players.forEach(player => {
+      player.wasAttacked = false;
+      player.hasDefended = false;
+      this.addDebugLog(`[턴 시작] ${player.name}의 플래그 초기화: wasAttacked=false, hasDefended=false`);
+    });
+
     // 1. 턴 시작 이벤트
     const turnStartEvent: ModifiableEvent = {
       type: GameEventType.TURN_START,
@@ -289,6 +348,8 @@ export class TurnProcessor {
   }
 
   private async processAttack(attacker: Player, target: Player, logs: string[]): Promise<void> {
+    this.addDebugLog(`[공격 처리] ${attacker.name}이(가) ${target.name}을(를) 공격합니다.`);
+    
     // Before Attack 이벤트 발생
     const beforeAttackEvent: ModifiableEvent = {
       type: GameEventType.BEFORE_ATTACK,
@@ -301,9 +362,14 @@ export class TurnProcessor {
 
     // 이벤트가 취소되었으면 중단
     if (beforeAttackEvent.cancelled) {
+      this.addDebugLog(`[공격 처리] ${attacker.name}의 공격이 취소되었습니다.`);
       logs.push(`${attacker.name}의 공격이 취소되었습니다.`);
       return;
     }
+
+    // 타겟이 공격을 받았음을 표시
+    target.wasAttacked = true;
+    this.addDebugLog(`[공격 처리] ${target.name}의 wasAttacked 플래그를 true로 설정합니다.`);
 
     // Before Evade 이벤트 발생
     const beforeEvadeEvent: ModifiableEvent = {
@@ -318,6 +384,8 @@ export class TurnProcessor {
     // 회피 판정
     const evadeChance = 5 * (this.gameState.players.filter(p => p.status !== PlayerStatus.DEAD).length - target.evadeCount * 2);
     const isEvadeSuccess = Math.random() * 100 < evadeChance;
+    
+    this.addDebugLog(`[공격 처리] ${target.name}의 회피 판정: ${evadeChance}% 확률, 성공: ${isEvadeSuccess}`);
 
     // After Evade 이벤트 발생
     const afterEvadeEvent: ModifiableEvent = {
@@ -334,13 +402,17 @@ export class TurnProcessor {
     await this.eventSystem.emit(afterEvadeEvent);
 
     if (isEvadeSuccess) {
+      this.addDebugLog(`[공격 처리] ${target.name}이(가) 회피에 성공했습니다.`);
       logs.push(`${target.name}이(가) 회피에 성공했습니다!`);
       return;
     }
 
     // 데미지 적용
     const finalDamage = beforeAttackEvent.data.damage;
+    const oldHp = target.hp;
     target.hp -= finalDamage;
+    
+    this.addDebugLog(`[공격 처리] ${target.name}에게 데미지 적용: ${oldHp} → ${target.hp} (데미지: ${finalDamage})`);
 
     // After Attack 이벤트 발생
     const afterAttackEvent: ModifiableEvent = {
@@ -360,6 +432,7 @@ export class TurnProcessor {
 
     // 사망 체크
     if (target.hp <= 0) {
+      this.addDebugLog(`[공격 처리] ${target.name}이(가) 사망했습니다.`);
       target.status = PlayerStatus.DEAD;
       const deathEvent: ModifiableEvent = {
         type: GameEventType.DEATH,
@@ -374,6 +447,8 @@ export class TurnProcessor {
   }
 
   private async processDefend(player: Player, logs: string[]): Promise<void> {
+    this.addDebugLog(`[방어 처리] ${player.name}이(가) 방어를 시도합니다.`);
+    
     // Before Defend 이벤트 발생
     const beforeDefendEvent: ModifiableEvent = {
       type: GameEventType.BEFORE_DEFEND,
@@ -386,15 +461,23 @@ export class TurnProcessor {
 
     // 이벤트가 취소되었으면 중단
     if (beforeDefendEvent.cancelled) {
+      this.addDebugLog(`[방어 처리] ${player.name}의 방어가 취소되었습니다.`);
       logs.push(`${player.name}의 방어가 취소되었습니다.`);
       return;
     }
 
+    // 방어 사용 플래그 설정
+    player.hasDefended = true;
+    this.addDebugLog(`[방어 처리] ${player.name}의 hasDefended 플래그를 true로 설정합니다.`);
+
     // 방어게이지가 있으면 소모
     if (player.defenseGauge > 0) {
+      const oldDefenseGauge = player.defenseGauge;
       player.defenseGauge--;
+      this.addDebugLog(`[방어 처리] ${player.name}의 방어게이지 소모: ${oldDefenseGauge} → ${player.defenseGauge}`);
       logs.push(`${player.name}의 방어게이지가 소모되었습니다. (남은 방어게이지: ${player.defenseGauge})`);
     } else {
+      this.addDebugLog(`[방어 처리] ${player.name}의 방어게이지가 부족합니다.`);
       logs.push(`${player.name}의 방어게이지가 부족합니다.`);
     }
 
@@ -410,6 +493,8 @@ export class TurnProcessor {
       modified: false
     };
     await this.eventSystem.emit(afterDefendEvent);
+    
+    this.addDebugLog(`[방어 처리] ${player.name}의 방어 처리가 완료되었습니다.`);
   }
 
   private async processEvade(player: Player, logs: string[]): Promise<void> {

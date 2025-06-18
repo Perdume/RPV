@@ -137,15 +137,36 @@ export class AbilityManager {
   }
 
   private async handlePerfectGuard(event: ModifiableEvent): Promise<void> {
-    const { player } = event.data;
+    const { player, playerName, oldDefenseGauge, newDefenseGauge, startHp, currentHp } = event.data;
+    
+    console.log(`[AbilityManager] 퍼펙트 가드 이벤트 처리 시작:`);
+    console.log(`  - 플레이어 ID: ${player}`);
+    console.log(`  - 플레이어 이름: ${playerName}`);
+    console.log(`  - 방어 게이지 변화: ${oldDefenseGauge} → ${newDefenseGauge}`);
+    console.log(`  - 체력 변화: ${startHp} → ${currentHp}`);
+    
     const playerObj = this.findPlayer(player);
     if (playerObj) {
+      console.log(`[AbilityManager] 플레이어 ${playerName}을 찾았습니다. 능력들의 onPerfectGuard를 호출합니다.`);
+      
       for (const ability of this.abilities.values()) {
         if (ability.isActive) {
-          await ability.onPerfectGuard?.(event);
+          console.log(`[AbilityManager] 능력 ${ability.id}의 onPerfectGuard 호출`);
+          try {
+            await ability.onPerfectGuard?.(event);
+            console.log(`[AbilityManager] 능력 ${ability.id}의 onPerfectGuard 완료`);
+          } catch (error) {
+            console.error(`[AbilityManager] 능력 ${ability.id}의 onPerfectGuard에서 오류 발생:`, error);
+          }
+        } else {
+          console.log(`[AbilityManager] 능력 ${ability.id}는 비활성화 상태입니다.`);
         }
       }
+    } else {
+      console.error(`[AbilityManager] 플레이어 ID ${player}를 찾을 수 없습니다.`);
     }
+    
+    console.log(`[AbilityManager] 퍼펙트 가드 이벤트 처리 완료`);
   }
 
   private async handleDeath(event: ModifiableEvent): Promise<void> {
