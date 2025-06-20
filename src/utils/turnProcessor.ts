@@ -360,15 +360,24 @@ export class TurnProcessor {
       const oldEvadeCount = player.evadeCount;
       
       if (player.actionType === 'EVADE') {
-        // +1 (이미 processEvade에서 처리됨)
-        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} (회피 선택으로 +1)`);
+        // +1
+        player.evadeCount++;
+        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} → ${player.evadeCount} (회피 선택으로 +1)`);
+        logs.push(`${player.name}의 회피카운트가 증가했습니다. (현재 회피카운트: ${player.evadeCount})`);
       } else if (player.actionType === 'DEFEND') {
         // +0 (변화 없음)
         this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} (방어 선택으로 변화 없음)`);
-      } else {
+      } else if (player.actionType === 'ATTACK' || player.actionType === 'ABILITY') {
         // 그외: -1
         player.evadeCount = Math.max(0, player.evadeCount - 1);
-        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} → ${player.evadeCount} (그외 액션으로 -1)`);
+        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} → ${player.evadeCount} (${player.actionType} 액션으로 -1)`);
+        if (oldEvadeCount !== player.evadeCount) {
+          logs.push(`${player.name}의 회피카운트가 감소했습니다. (현재 회피카운트: ${player.evadeCount})`);
+        }
+      } else {
+        // 액션 타입이 없는 경우 (기본적으로 -1)
+        player.evadeCount = Math.max(0, player.evadeCount - 1);
+        this.addDebugLog(`[회피카운트] ${player.name}의 회피카운트: ${oldEvadeCount} → ${player.evadeCount} (액션 없음으로 -1)`);
         if (oldEvadeCount !== player.evadeCount) {
           logs.push(`${player.name}의 회피카운트가 감소했습니다. (현재 회피카운트: ${player.evadeCount})`);
         }
@@ -401,10 +410,19 @@ export class TurnProcessor {
     this.addDebugLog(`[공격 처리] ${target.name}의 wasAttacked 플래그를 true로 설정합니다.`);
 
     // 방어 체크 - 방어 선택 시 공격을 확정적으로 무효화
-    if (target.hasDefended && target.defenseGauge > 0) {
-      this.addDebugLog(`[공격 처리] ${target.name}이(가) 방어로 공격을 무효화합니다.`);
-      target.defenseGauge--;
-      logs.push(`${target.name}이(가) 방어로 공격을 무효화했습니다!`);
+    if (target.hasDefended) {
+      this.addDebugLog(`[공격 처리] ${target.name}이(가) 방어를 시도합니다.`);
+      
+      if (target.defenseGauge > 0) {
+        // 방어게이지가 있으면 소모하고 공격 무효화
+        target.defenseGauge--;
+        this.addDebugLog(`[공격 처리] ${target.name}이(가) 방어게이지를 소모하여 공격을 무효화합니다.`);
+        logs.push(`${target.name}이(가) 방어로 공격을 무효화했습니다! (남은 방어게이지: ${target.defenseGauge})`);
+      } else {
+        // 방어게이지가 없어도 방어는 성공 (규칙 우선)
+        this.addDebugLog(`[공격 처리] ${target.name}이(가) 방어게이지 없이도 방어에 성공합니다.`);
+        logs.push(`${target.name}이(가) 방어로 공격을 무효화했습니다! (방어게이지 부족했지만 방어 성공)`);
+      }
       
       // 방어 이벤트 발생
       const defendEvent: ModifiableEvent = {
@@ -517,20 +535,10 @@ export class TurnProcessor {
       return;
     }
 
-    // 방어 사용 플래그 설정
+    // 방어 사용 플래그 설정 (방어게이지 소모는 공격받을 때만)
     player.hasDefended = true;
     this.addDebugLog(`[방어 처리] ${player.name}의 hasDefended 플래그를 true로 설정합니다.`);
-
-    // 방어게이지가 있으면 소모
-    if (player.defenseGauge > 0) {
-      const oldDefenseGauge = player.defenseGauge;
-      player.defenseGauge--;
-      this.addDebugLog(`[방어 처리] ${player.name}의 방어게이지 소모: ${oldDefenseGauge} → ${player.defenseGauge}`);
-      logs.push(`${player.name}의 방어게이지가 소모되었습니다. (남은 방어게이지: ${player.defenseGauge})`);
-    } else {
-      this.addDebugLog(`[방어 처리] ${player.name}의 방어게이지가 부족합니다.`);
-      logs.push(`${player.name}의 방어게이지가 부족합니다.`);
-    }
+    this.addDebugLog(`[방어 처리] ${player.name}의 현재 방어게이지: ${player.defenseGauge}/${player.maxDefenseGauge}`);
 
     // After Defend 이벤트 발생
     const afterDefendEvent: ModifiableEvent = {
@@ -559,8 +567,8 @@ export class TurnProcessor {
     };
     await this.eventSystem.emit(evadeEvent);
 
-    player.evadeCount++;
-    logs.push(`${player.name}의 회피카운트가 증가했습니다. (현재 회피카운트: ${player.evadeCount})`);
+    // 회피카운트 증가는 processActions에서 처리
+    this.addDebugLog(`[회피 처리] ${player.name}이(가) 회피를 선택했습니다.`);
   }
 
   private async processPass(player: Player, logs: string[]): Promise<void> {
