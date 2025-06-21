@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { theme } from './styles/theme';
 import { PlayerTable } from './components/PlayerTable';
@@ -74,10 +74,29 @@ const App: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
-  const [currentTurn, setCurrentTurn] = useState(0);
+  const [currentTurn, setCurrentTurn] = useState(1);
   const [isDeathZone, setIsDeathZone] = useState(false);
-  const [eventSystem] = useState(() => new EventSystem());
-  const [abilityManager] = useState(() => new AbilityManager(eventSystem));
+  
+  // EventSystem과 AbilityManager를 useRef로 관리하여 중복 생성 방지
+  const eventSystemRef = useRef<EventSystem | null>(null);
+  const abilityManagerRef = useRef<AbilityManager | null>(null);
+  const turnProcessorRef = useRef<TurnProcessor | null>(null);
+
+  // EventSystem 초기화
+  if (!eventSystemRef.current) {
+    console.log('[APP] EventSystem 생성 중...');
+    eventSystemRef.current = new EventSystem();
+    console.log('[APP] EventSystem 생성 완료');
+  }
+
+  // AbilityManager 초기화 (EventSystem이 준비된 후)
+  if (!abilityManagerRef.current && eventSystemRef.current) {
+    console.log('[APP] AbilityManager 생성 중...');
+    abilityManagerRef.current = new AbilityManager(eventSystemRef.current);
+    console.log('[APP] AbilityManager 생성 완료');
+  }
+
+  const abilityManager = abilityManagerRef.current;
   const { runEventTest, runRollbackTest, runRedoTest } = useEventTesting();
 
   // 파일 시스템 초기화
@@ -131,7 +150,7 @@ const App: React.FC = () => {
 
         // 능력 등록
         newPlayers.forEach(player => {
-          if (player.abilityId) {
+          if (player.abilityId && abilityManager) {
             abilityManager.assignAbility(player.id, player.abilityId);
           }
         });
@@ -166,7 +185,8 @@ const App: React.FC = () => {
   };
 
   const handleActionSubmit = async (actions: PlayerAction[]) => {
-    console.log('[DEBUG] === 턴 처리 시작 ===');
+    console.log('[APP] === 턴 처리 시작 ===');
+    console.log('[APP] TurnProcessor 재사용 확인');
     console.log('[DEBUG] 입력된 행동:', actions);
 
     const gameState: GameState = {
@@ -180,8 +200,16 @@ const App: React.FC = () => {
       currentSession: 'game-session'
     };
 
-    const turnProcessor = new TurnProcessor(gameState, eventSystem);
-    const result = await turnProcessor.processTurn(actions);
+    // TurnProcessor가 없으면 생성, 있으면 재사용
+    if (!turnProcessorRef.current) {
+      console.log('[APP] TurnProcessor 새로 생성 중...');
+      turnProcessorRef.current = new TurnProcessor(gameState, eventSystemRef.current!);
+      console.log('[APP] TurnProcessor 생성 완료');
+    } else {
+      console.log('[APP] 기존 TurnProcessor 재사용');
+    }
+    
+    const result = await turnProcessorRef.current.processTurn(actions);
     handleTurnComplete(result);
   };
 
@@ -289,9 +317,11 @@ const App: React.FC = () => {
         </button>
         <button 
           onClick={async () => {
-            const debug = abilityManager.getPlayerAbility(1); // 디버거 플레이어
-            if (debug instanceof Debug) {
-              await debug.testVariables();
+            if (abilityManager) {
+              const debug = abilityManager.getPlayerAbility(1); // 디버거 플레이어
+              if (debug instanceof Debug) {
+                await debug.testVariables();
+              }
             }
           }}
           style={{

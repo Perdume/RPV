@@ -14,9 +14,21 @@ export class AbilityManager {
   private players: Map<number, Player> = new Map();
 
   constructor(eventSystem: EventSystem) {
+    console.log(`[ABILITY MANAGER] === AbilityManager 생성 시작 ===`);
+    console.log(`[ABILITY MANAGER] 생성 호출 스택:`, new Error().stack);
+    console.log(`[ABILITY MANAGER] EventSystem 인스턴스:`, eventSystem);
+    
     this.eventSystem = eventSystem;
+    
+    console.log(`[ABILITY MANAGER] registerDefaultAbilities 호출 전`);
     this.registerDefaultAbilities();
+    console.log(`[ABILITY MANAGER] 등록된 능력들:`, Array.from(this.abilities.keys()));
+    
+    console.log(`[ABILITY MANAGER] setupEventHandlers 호출 전`);
     this.setupEventHandlers();
+    console.log(`[ABILITY MANAGER] setupEventHandlers 호출 후`);
+    
+    console.log(`[ABILITY MANAGER] === AbilityManager 생성 완료 ===`);
   }
 
   private registerDefaultAbilities(): void {
@@ -26,24 +38,57 @@ export class AbilityManager {
   }
 
   private setupEventHandlers(): void {
-    // Pre/Post 이벤트 핸들러
+    console.log(`[ABILITY MANAGER] === 이벤트 핸들러 설정 시작 ===`);
+    console.log(`[ABILITY MANAGER] 호출 스택:`, new Error().stack);
+    
+    // 각 이벤트 등록 시 로깅
+    console.log(`[ABILITY MANAGER] BEFORE_ATTACK 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.BEFORE_ATTACK, this.handleBeforeAttack.bind(this));
+    
+    console.log(`[ABILITY MANAGER] AFTER_ATTACK 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.AFTER_ATTACK, this.handleAfterAttack.bind(this));
+    
+    console.log(`[ABILITY MANAGER] BEFORE_DEFEND 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.BEFORE_DEFEND, this.handleBeforeDefend.bind(this));
+    
+    console.log(`[ABILITY MANAGER] AFTER_DEFEND 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.AFTER_DEFEND, this.handleAfterDefend.bind(this));
+    
+    console.log(`[ABILITY MANAGER] BEFORE_EVADE 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.BEFORE_EVADE, this.handleBeforeEvade.bind(this));
+    
+    console.log(`[ABILITY MANAGER] AFTER_EVADE 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.AFTER_EVADE, this.handleAfterEvade.bind(this));
+    
+    console.log(`[ABILITY MANAGER] BEFORE_PASS 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.BEFORE_PASS, this.handleBeforePass.bind(this));
+    
+    console.log(`[ABILITY MANAGER] AFTER_PASS 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.AFTER_PASS, this.handleAfterPass.bind(this));
 
     // 기존 이벤트 핸들러
+    console.log(`[ABILITY MANAGER] TURN_START 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.TURN_START, this.handleTurnStart.bind(this));
+    
+    console.log(`[ABILITY MANAGER] TURN_END 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.TURN_END, this.handleTurnEnd.bind(this));
+    
+    console.log(`[ABILITY MANAGER] GAME_START 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.GAME_START, this.handleGameStart.bind(this));
+    
+    console.log(`[ABILITY MANAGER] GAME_END 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.GAME_END, this.handleGameEnd.bind(this));
+    
+    console.log(`[ABILITY MANAGER] PERFECT_GUARD 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.PERFECT_GUARD, this.handlePerfectGuard.bind(this));
+    
+    console.log(`[ABILITY MANAGER] DEATH 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.DEATH, this.handleDeath.bind(this));
+    
+    console.log(`[ABILITY MANAGER] FOCUS_ATTACK 핸들러 등록 중...`);
     this.eventSystem.on(GameEventType.FOCUS_ATTACK, this.handleFocusAttack.bind(this));
+    
+    console.log(`[ABILITY MANAGER] === 이벤트 핸들러 설정 완료 ===`);
   }
 
   setGameState(gameState: { players: Player[] }): void {
@@ -198,11 +243,20 @@ export class AbilityManager {
   }
 
   private async handleBeforeAttack(event: ModifiableEvent): Promise<void> {
+    console.log(`[ABILITY DEBUG] === BeforeAttack 핸들러 시작 ===`);
+    console.log(`[ABILITY DEBUG] 이벤트 데이터:`, event.data);
+    console.log(`[ABILITY DEBUG] 등록된 능력 수:`, this.abilities.size);
+    
     for (const ability of this.abilities.values()) {
+      console.log(`[ABILITY DEBUG] 능력 처리: ${ability.id}, 활성화: ${ability.isActive}`);
       if (ability.isActive) {
+        console.log(`[ABILITY DEBUG] ${ability.id} onBeforeAttack 실행 전:`, event.data);
         await ability.onBeforeAttack?.(event);
+        console.log(`[ABILITY DEBUG] ${ability.id} onBeforeAttack 실행 후:`, event.data);
       }
     }
+    
+    console.log(`[ABILITY DEBUG] === BeforeAttack 핸들러 완료 ===`);
   }
 
   private async handleAfterAttack(event: ModifiableEvent): Promise<void> {

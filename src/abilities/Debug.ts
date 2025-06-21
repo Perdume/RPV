@@ -9,48 +9,51 @@ export class Debug extends BaseAbility {
 
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {
     const owner = this.getOwner();
-    if (!owner) return;
+    console.log(`[DEBUG ABILITY] === Debug onBeforeAttack 시작 ===`);
+    console.log(`[DEBUG ABILITY] Owner: ${owner}, 공격자: ${event.data.attacker}`);
+    console.log(`[DEBUG ABILITY] 입력 이벤트 데이터:`, event.data);
     
-    console.log(`[DEBUG] Owner: ${owner}, 공격자: ${event.data.attacker}`);
-    
-    if (owner === event.data.attacker) {
-      // 공격 횟수 카운트 (영구 변수)
-      const attackCount = this.getPermanent<number>('attack_count', schemas.number);
-      await this.setPermanent('attack_count', attackCount + 1, schemas.number);
-      
-      console.log(`[디버그로거] 타겟: ${event.data.target}`);
-      if(event.data.target == 2) {
-        // 3번 플레이어로 타겟 변경
-        const players = this.getSession<number[]>('players', schemas.array);
-        const targetPlayer = players.find(p => p == 3);
-        if (targetPlayer) {
-          event.data.target = {
-            id: 3,
-            name: `Player ${3}`,
-            health: event.data.target.health
-          };
-        }
-        console.log(`[디버그로거] 타겟 변경: ${event.data.target} -> ${targetPlayer}`);
-      }
-      
-      // 이번 턴 공격 여부 (턴 변수)
-      this.setTurn('attacked_this_turn', true, event.data.turn || 0, schemas.boolean);
-      
-      // 데미지 부스트 (세션 변수)
-      event.data.damage = 10;
+    // 중복 실행 방지
+    if (this.getTurn('already_processed', event.data.turn || 0, schemas.boolean)) {
+      console.log(`[DEBUG ABILITY] 이미 처리된 턴 - 스킵`);
+      return;
     }
     
+    if (owner === event.data.attacker) {
+      console.log(`[DEBUG ABILITY] 공격자와 Owner 일치 - 능력 발동`);
+      
+      // 처리 완료 플래그 설정
+      this.setTurn('already_processed', true, event.data.turn || 0, schemas.boolean);
+      
+      // 공격 횟수 카운트
+      const attackCount = this.getPermanent<number>('attack_count', schemas.number);
+      await this.setPermanent('attack_count', attackCount + 1, schemas.number);
+      console.log(`[DEBUG ABILITY] 공격 횟수 업데이트: ${attackCount} -> ${attackCount + 1}`);
+      
+      console.log(`[DEBUG ABILITY] 원래 타겟: ${event.data.target}`);
+      if(event.data.target == 2) {
+        event.data.target = 3;
+        console.log(`[DEBUG ABILITY] 타겟 변경: 2 -> 3`);
+      }
+      console.log(`[DEBUG ABILITY] 최종 타겟: ${event.data.target}`);
+      
+      // 데미지 설정
+      console.log(`[DEBUG ABILITY] 원래 데미지: ${event.data.damage}`);
+      event.data.damage = 10;
+      console.log(`[DEBUG ABILITY] 변경된 데미지: ${event.data.damage}`);
+      
+      this.setTurn('attacked_this_turn', true, event.data.turn || 0, schemas.boolean);
+    } else {
+      console.log(`[DEBUG ABILITY] 공격자와 Owner 불일치 - 능력 발동 안 함`);
+    }
+    
+    console.log(`[DEBUG ABILITY] 최종 이벤트 데이터:`, event.data);
+    console.log(`[DEBUG ABILITY] === Debug onBeforeAttack 완료 ===`);
   }
 
   async onAfterAttack(event: ModifiableEvent): Promise<void> {
     const owner = this.getOwner();
     if (!owner) return;
-
-    // 공격 성공 시 부스트 증가
-    if (owner === event.data.attacker) {
-      const currentBoost = this.getSession<number>('damage_boost', schemas.number);
-      this.setSession('damage_boost', currentBoost + 0.1, schemas.number);
-    }
     
   }
 
@@ -117,9 +120,11 @@ export class Debug extends BaseAbility {
       console.log(`[DEBUG] 턴 ${turnNumber}: 공격을 실행했습니다.`);
     }
     
+    // 중복 실행 방지 플래그 정리
+    console.log(`[DEBUG] 턴 ${turnNumber}: 중복 실행 방지 플래그 정리`);
+    
     // 턴 변수 정리
     this.cleanupTurnVariables(turnNumber);
-    
   }
 
   async onGameStart(event: ModifiableEvent): Promise<void> {
