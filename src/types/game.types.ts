@@ -8,11 +8,30 @@ export enum PlayerStatus {
 
 export type ActionType = 'ATTACK' | 'DEFEND' | 'ABILITY' | 'PASS' | 'EVADE';
 
+// 🆕 상태이상 시스템
+export interface StatusEffect {
+  id: string;
+  name: string;
+  description: string;
+  duration: number; // -1이면 영구
+  stackable: boolean;
+  type: 'buff' | 'debuff' | 'neutral';
+  stacks?: number; // 중첩 가능한 경우
+  source?: number; // 상태이상을 준 플레이어 ID
+}
+
 export interface PlayerAction {
   playerId: number;
   targetId: number;
   actionType: ActionType;
   abilityId?: string;
+  
+  // 🆕 특수 입력 지원
+  additionalTargets?: number[];  // 동기화용
+  prediction?: {                 // 선제예측용
+    action: string;
+    abilityUse: boolean;
+  };
 }
 
 export type PlayerId = number;
@@ -34,7 +53,7 @@ export interface Player {
   evadeCount: number;
   abilityId: string;
   status: PlayerStatus;
-  statusEffects: string[];
+  statusEffects: StatusEffect[]; // 🆕 StatusEffect[]로 변경
   isPerfectGuard: boolean;
   defense: number;
   maxDefense: number;
@@ -55,6 +74,10 @@ export interface Player {
   currentTurn: number;
   noDamageTurns: number;
   inactiveTurns: number;
+  
+  // 🆕 추가 프로퍼티들
+  isInvincible: boolean;         // 무적 상태
+  customFlags: Map<string, any>; // 커스텀 플래그
 }
 
 export interface GameState {
@@ -66,6 +89,28 @@ export interface GameState {
   survivors: Player[];
   deathZone: boolean;
   currentSession: string;
+  
+  // 🆕 새로 추가
+  statusEffects: Map<number, StatusEffect[]>;
+  customGameFlags: Map<string, any>;
+  delayedEffects: DelayedEffect[];
+  gameHistory: GameHistoryEvent[];
+}
+
+// 🆕 새로운 인터페이스들
+export interface DelayedEffect {
+  id: string;
+  playerId?: number;
+  timing: string;
+  effect: () => void;
+  turns: number;
+}
+
+export interface GameHistoryEvent {
+  turn: number;
+  type: string;
+  data: any;
+  timestamp: number;
 }
 
 export interface TurnResult {
@@ -88,16 +133,15 @@ export interface ModifiableEvent {
   data: any;
   cancelled: boolean;
   modified: boolean;
+  preventDefault?: () => void; // 🆕 추가
 }
 
-export interface GameEvent {
-  type: GameEventType;
-  timestamp: number;
-  data: any;
+export interface GameEvent extends ModifiableEvent {
+  // 기존 GameEvent 인터페이스 유지
 }
 
 export enum GameEventType {
-  // 기본 이벤트
+  // 기존 이벤트들
   GAME_START = 'GAME_START',
   GAME_END = 'GAME_END',
   TURN_START = 'TURN_START',
@@ -136,11 +180,16 @@ export enum GameEventType {
   DEFENSE_CONSUMED = 'DEFENSE_CONSUMED',
   EVADE_SUCCESS = 'EVADE_SUCCESS',
   EVADE_FAIL = 'EVADE_FAIL',
-  ABILITY_TRIGGER = 'ABILITY_TRIGGER'
-}
-
-export interface GameEvent extends ModifiableEvent {
-  // 기존 GameEvent 인터페이스 유지
+  ABILITY_TRIGGER = 'ABILITY_TRIGGER',
+  
+  // 🆕 새로 추가된 이벤트들
+  BEFORE_DEATH = 'BEFORE_DEATH',
+  AFTER_DEATH = 'AFTER_DEATH',
+  BEFORE_HEAL = 'BEFORE_HEAL',
+  AFTER_HEAL = 'AFTER_HEAL',
+  STATUS_EFFECT_APPLIED = 'STATUS_EFFECT_APPLIED',
+  STATUS_EFFECT_REMOVED = 'STATUS_EFFECT_REMOVED',
+  ABILITY_CHAIN_TRIGGERED = 'ABILITY_CHAIN_TRIGGERED'
 }
 
 export interface Ability {
@@ -167,6 +216,15 @@ export interface Ability {
   onDeath?(event: ModifiableEvent): Promise<void>;
   onPerfectGuard?(event: ModifiableEvent): Promise<void>;
   onFocusAttack?(event: ModifiableEvent): Promise<void>;
+  
+  // 🆕 새로운 이벤트 훅들
+  onBeforeDeath?(event: ModifiableEvent): Promise<void>;
+  onAfterDeath?(event: ModifiableEvent): Promise<void>;
+  onBeforeHeal?(event: ModifiableEvent): Promise<void>;
+  onAfterHeal?(event: ModifiableEvent): Promise<void>;
+  onStatusEffectApplied?(event: ModifiableEvent): Promise<void>;
+  onStatusEffectRemoved?(event: ModifiableEvent): Promise<void>;
+  onAnyEvent?(event: ModifiableEvent): Promise<void>; // 모든 이벤트 감지
 }
 
 export interface AbilityContext {
@@ -179,6 +237,14 @@ export interface AbilityContext {
   currentTurn: number;
   logs: string[];
   ability: Ability;
+  statusEffectManager: any;
+  performanceMetrics: {
+    totalExecutions: number;
+    averageExecutionTime: number;
+    errorCount: number;
+    lastExecutionTimestamp: number;
+  };
+  errorCount: number;
 }
 
 export interface GameSessionData {
@@ -203,7 +269,6 @@ export interface GameSnapshot {
   };
 }
 
-// 변수 스키마 인터페이스
 export interface VariableSchema<T> {
   validate(value: any): value is T;
   defaultValue?: T;

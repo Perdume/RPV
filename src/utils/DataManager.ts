@@ -1,6 +1,8 @@
 import { PlayerRecord, GameRecord, AbilityRecord } from '../types/records.types';
 import { GameSessionData, AbilityData, GameSnapshot } from '../types/game.types';
 import { initFileSystem } from './fsInit';
+import path from 'path';
+import fs from 'fs';
 
 interface FileSystemError extends Error {
   code?: string;
@@ -76,7 +78,7 @@ export class DataManager {
   }
 
   private static getDataPath() {
-    return window.electron?.ipcRenderer ? 'data' : 'src/data';
+    return window.electron?.ipcRenderer ? 'Data' : 'src/data';
   }
 
   private static async ensureDirectory(path: string) {
@@ -395,6 +397,17 @@ export class DataManager {
       console.log(`[DataManager] 데이터 삭제 완료: ${playerId}_${abilityId}`);
     } catch (error) {
       console.error(`[DataManager] 데이터 삭제 실패: ${playerId}_${abilityId}`, error);
+    }
+  }
+
+  // 🆕 성능 데이터 저장
+  static async savePerformanceData(turnNumber: number, data: any): Promise<void> {
+    try {
+      const filePath = path.join(this.getDataPath(), 'performance', `turn_${turnNumber}_performance.json`);
+      await this.ensureDirectory(path.dirname(filePath));
+      await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (error) {
+      console.error(`성능 데이터 저장 실패 (턴 ${turnNumber}):`, error);
     }
   }
 } 

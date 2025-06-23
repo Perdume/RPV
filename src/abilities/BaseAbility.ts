@@ -1,6 +1,7 @@
-import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext } from '../types/game.types';
+import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext, StatusEffect } from '../types/game.types';
 import { AbilityManager } from './AbilityManager';
 import { DataManager } from '../utils/DataManager';
+import { StatusEffectManager } from '../utils/StatusEffectManager';
 import { VariableSchema, schemas } from '../types/game.types';
 
 // 변수 타입 정의
@@ -9,6 +10,21 @@ interface AbilityVariable<T = any> {
   type: 'permanent' | 'session' | 'turn';
   lastUpdated: number;
   schema?: VariableSchema<T>;
+}
+
+// 🆕 능력 체인 정보
+interface AbilityChain {
+  id: string;
+  priority: number;
+  condition?: () => boolean;
+  nextAbility?: string;
+}
+
+// 🆕 조건부 실행 정보
+interface ConditionalExecution {
+  condition: () => boolean;
+  priority: number;
+  fallback?: () => void;
 }
 
 export abstract class BaseAbility implements Ability {
@@ -22,8 +38,36 @@ export abstract class BaseAbility implements Ability {
   protected ownerId: number | null = null;
   protected abilityManager: AbilityManager | null = null;
   
+  // 🆕 확장된 속성들
+  priority: number = 0; // 기본 우선순위
+  executionTime: number = 0; // 실행 시간 추적
+  errorCount: number = 0; // 에러 발생 횟수
+  lastExecutionTime: number = 0; // 마지막 실행 시간
+  
   // 통합된 변수 저장소
   private variables: Map<string, AbilityVariable> = new Map();
+  
+  // 🆕 상태이상 관리
+  private statusEffects: Map<string, StatusEffect> = new Map();
+  
+  // 🆕 능력 체인 관리
+  private abilityChains: Map<string, AbilityChain> = new Map();
+  
+  // 🆕 조건부 실행 관리
+  private conditionalExecutions: Map<string, ConditionalExecution> = new Map();
+  
+  // 🆕 성능 모니터링
+  private performanceMetrics: {
+    totalExecutions: number;
+    totalExecutionTime: number;
+    averageExecutionTime: number;
+    lastExecutionTimestamp: number;
+  } = {
+    totalExecutions: 0,
+    totalExecutionTime: 0,
+    averageExecutionTime: 0,
+    lastExecutionTimestamp: 0
+  };
 
   constructor(id: string, name: string, description: string, maxCooldown: number = 0, maxUses: number) {
     this.id = id;
@@ -173,6 +217,139 @@ export abstract class BaseAbility implements Ability {
     }
   }
 
+  // === 🆕 상태이상 관리 시스템 ===
+  
+  // 상태이상 적용
+  protected applyStatusEffect(targetId: number, effectId: string, duration: number = 1, stacks: number = 1): boolean {
+    try {
+      const success = StatusEffectManager.getInstance().applyStatusEffect(targetId, effectId, duration, stacks);
+      if (success) {
+        this.statusEffects.set(effectId, { id: effectId, duration, stacks });
+      }
+      return success;
+    } catch (error) {
+      console.error(`[${this.id}] 상태이상 적용 실패:`, error);
+      return false;
+    }
+  }
+  
+  // 상태이상 제거
+  protected removeStatusEffect(targetId: number, effectId: string): boolean {
+    try {
+      const success = StatusEffectManager.getInstance().removeStatusEffect(targetId, effectId);
+      if (success) {
+        this.statusEffects.delete(effectId);
+      }
+      return success;
+    } catch (error) {
+      console.error(`[${this.id}] 상태이상 제거 실패:`, error);
+      return false;
+    }
+  }
+  
+  // 상태이상 체크
+  protected hasStatusEffect(targetId: number, effectId: string): boolean {
+    return StatusEffectManager.getInstance().hasStatusEffect(targetId, effectId);
+  }
+  
+  // 상태이상 정보 가져오기
+  protected getStatusEffect(targetId: number, effectId: string): StatusEffect | null {
+    return StatusEffectManager.getInstance().getStatusEffect(targetId, effectId);
+  }
+
+  // === 🆕 능력 체인 시스템 ===
+  
+  // 능력 체인 등록
+  protected registerAbilityChain(chainId: string, priority: number, condition?: () => boolean, nextAbility?: string): void {
+    this.abilityChains.set(chainId, {
+      id: chainId,
+      priority,
+      condition,
+      nextAbility
+    });
+  }
+  
+  // 능력 체인 실행
+  protected async executeAbilityChain(chainId: string, context: AbilityContext): Promise<void> {
+    const chain = this.abilityChains.get(chainId);
+    if (!chain) return;
+    
+    if (chain.condition && !chain.condition()) return;
+    
+    // 다음 능력 실행
+    if (chain.nextAbility && this.abilityManager) {
+      const nextAbility = this.abilityManager.getAbility(chain.nextAbility);
+      if (nextAbility) {
+        await nextAbility.execute(context);
+      }
+    }
+  }
+
+  // === 🆕 조건부 실행 시스템 ===
+  
+  // 조건부 실행 등록
+  protected registerConditionalExecution(executionId: string, condition: () => boolean, priority: number, fallback?: () => void): void {
+    this.conditionalExecutions.set(executionId, {
+      condition,
+      priority,
+      fallback
+    });
+  }
+  
+  // 조건부 실행 체크
+  protected checkConditionalExecution(executionId: string): boolean {
+    const execution = this.conditionalExecutions.get(executionId);
+    if (!execution) return false;
+    
+    return execution.condition();
+  }
+
+  // === 🆕 성능 모니터링 ===
+  
+  // 실행 시간 측정 시작
+  protected startPerformanceMeasurement(): void {
+    this.lastExecutionTime = performance.now();
+  }
+  
+  // 실행 시간 측정 종료
+  protected endPerformanceMeasurement(): void {
+    const executionTime = performance.now() - this.lastExecutionTime;
+    this.performanceMetrics.totalExecutions++;
+    this.performanceMetrics.totalExecutionTime += executionTime;
+    this.performanceMetrics.averageExecutionTime = 
+      this.performanceMetrics.totalExecutionTime / this.performanceMetrics.totalExecutions;
+    this.performanceMetrics.lastExecutionTimestamp = Date.now();
+  }
+  
+  // 성능 통계 가져오기
+  public getPerformanceStats(): typeof this.performanceMetrics {
+    return { ...this.performanceMetrics };
+  }
+
+  // === 🆕 에러 처리 및 복구 ===
+  
+  // 안전한 실행 래퍼
+  protected async safeExecute<T>(operation: () => Promise<T>, fallback?: T): Promise<T> {
+    try {
+      this.startPerformanceMeasurement();
+      const result = await operation();
+      this.endPerformanceMeasurement();
+      return result;
+    } catch (error) {
+      this.errorCount++;
+      console.error(`[${this.id}] 실행 중 에러 발생:`, error);
+      if (fallback !== undefined) {
+        return fallback;
+      }
+      throw error;
+    }
+  }
+  
+  // 에러 상태 리셋
+  public resetErrorState(): void {
+    this.errorCount = 0;
+  }
+
   // === 파일 저장/로드 ===
   
   async loadFromFile(): Promise<void> {
@@ -192,7 +369,16 @@ export abstract class BaseAbility implements Ability {
         });
       }
       
-      console.log(`[${this.id}] 영구 변수 로드 완료: ${Object.keys(data.variables || {}).length}개`);
+      // 🆕 성능 메트릭 로드
+      if (data.performanceMetrics) {
+        this.performanceMetrics = { ...data.performanceMetrics };
+      }
+      
+      // 🆕 에러 카운트 로드
+      if (data.errorCount !== undefined) {
+        this.errorCount = data.errorCount;
+      }
+      
     } catch (error) {
       console.log(`[${this.id}] 새로운 능력 - 빈 데이터로 시작`);
       this.variables.clear();
@@ -202,50 +388,41 @@ export abstract class BaseAbility implements Ability {
   async saveToFile(): Promise<void> {
     if (!this.ownerId) return;
     
-    // 영구 변수만 파일에 저장
-    const permanentVars: Record<string, any> = {};
-    
+    // 영구 변수만 저장
+    const permanentVariables: Record<string, any> = {};
     this.variables.forEach((variable, key) => {
-      if (key.startsWith('perm_')) {
+      if (variable.type === 'permanent') {
         const cleanKey = key.replace('perm_', '');
-        permanentVars[cleanKey] = variable.value;
+        permanentVariables[cleanKey] = variable.value;
       }
     });
     
-    await DataManager.saveAbilityData(this.ownerId, this.id, {
-      playerId: this.ownerId,
-      abilityId: this.id,
-      variables: permanentVars,
-      lastUpdated: new Date().toISOString()
-    });
-  }
-
-  // === 변수 디버깅 도구 ===
-  
-  public debugVariables(): void {
-    console.group(`[${this.id}] 변수 상태`);
-    
-    const categories = {
-      '영구 변수': Array.from(this.variables.entries()).filter(([key]) => key.startsWith('perm_')),
-      '세션 변수': Array.from(this.variables.entries()).filter(([key]) => key.startsWith('sess_')),
-      '턴 변수': Array.from(this.variables.entries()).filter(([key]) => key.startsWith('turn_'))
+    const data = {
+      variables: permanentVariables,
+      // 🆕 성능 메트릭 저장
+      performanceMetrics: this.performanceMetrics,
+      // 🆕 에러 카운트 저장
+      errorCount: this.errorCount
     };
     
-    Object.entries(categories).forEach(([category, vars]) => {
-      if (vars.length > 0) {
-        console.log(`\n${category}:`);
-        vars.forEach(([key, variable]) => {
-          const cleanKey = key.replace(/^(perm_|sess_|turn_\d+_)/, '');
-          console.log(`  ${cleanKey}: ${JSON.stringify(variable.value)}`);
-        });
-      }
-    });
-    
-    console.groupEnd();
+    await DataManager.saveAbilityData(this.ownerId, this.id, data);
   }
 
-  // === 기존 메서드들 ===
-  
+  public debugVariables(): void {
+    console.log(`[${this.id}] === 변수 디버그 ===`);
+    console.log(`[${this.id}] 총 변수 수: ${this.variables.size}`);
+    
+    this.variables.forEach((variable, key) => {
+      console.log(`[${this.id}] ${key}: ${JSON.stringify(variable.value)} (${variable.type})`);
+    });
+    
+    // 🆕 성능 통계 출력
+    console.log(`[${this.id}] 성능 통계:`, this.performanceMetrics);
+    console.log(`[${this.id}] 에러 횟수: ${this.errorCount}`);
+    console.log(`[${this.id}] === 디버그 완료 ===`);
+  }
+
+  // === 기본 이벤트 핸들러들 ===
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {}
   async onAfterAttack(event: ModifiableEvent): Promise<void> {}
   async onBeforeDefend(event: ModifiableEvent): Promise<void> {}
@@ -262,6 +439,12 @@ export abstract class BaseAbility implements Ability {
   async onPerfectGuard(event: ModifiableEvent): Promise<void> {}
   async onFocusAttack(event: ModifiableEvent): Promise<void> {}
 
+  // 🆕 새로운 이벤트 핸들러들
+  async onStatusEffectApplied(event: ModifiableEvent): Promise<void> {}
+  async onStatusEffectRemoved(event: ModifiableEvent): Promise<void> {}
+  async onAbilityChainTriggered(event: ModifiableEvent): Promise<void> {}
+  async onConditionalExecutionFailed(event: ModifiableEvent): Promise<void> {}
+
   protected createContext(event: ModifiableEvent): AbilityContext {
     if (!this.abilityManager) {
       throw new Error('AbilityManager not set');
@@ -274,7 +457,10 @@ export abstract class BaseAbility implements Ability {
       variables: this.abilityManager.getVariables(),
       currentTurn: this.abilityManager.getCurrentTurn(),
       logs: this.abilityManager.getLogs(),
-      ability: this
+      ability: this,
+      statusEffectManager: StatusEffectManager.getInstance(),
+      performanceMetrics: this.performanceMetrics,
+      errorCount: this.errorCount
     };
   }
 
@@ -310,5 +496,30 @@ export abstract class BaseAbility implements Ability {
     
     if (availablePlayers.length === 0) return null;
     return availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
+  }
+
+  // 🆕 유틸리티 메서드들
+  
+  // 확률 계산
+  protected rollChance(percentage: number): boolean {
+    return Math.random() * 100 < percentage;
+  }
+  
+  // 범위 내 랜덤 값
+  protected randomInRange(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+  
+  // 플레이어 거리 계산
+  protected calculateDistance(player1: Player, player2: Player): number {
+    return Math.abs(player1.id - player2.id);
+  }
+  
+  // 능력 사용 가능 여부 체크
+  protected canUseAbility(context: AbilityContext): boolean {
+    if (!this.isActive) return false;
+    if (this.isOnCooldown()) return false;
+    if (this.errorCount > 10) return false; // 에러가 너무 많으면 비활성화
+    return true;
   }
 }

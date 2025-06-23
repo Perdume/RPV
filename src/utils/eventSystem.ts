@@ -60,6 +60,22 @@ export class EventSystem {
     }
   }
 
+  // 🆕 다중 이벤트 타입 리스닝
+  onMultiple(types: GameEventType[], callback: EventHandler): void {
+    for (const eventType of types) {
+      this.on(eventType, callback);
+    }
+  }
+
+  // 🆕 일회성 리스너
+  once(eventType: GameEventType, callback: EventHandler): void {
+    const onceHandler = async (event: ModifiableEvent) => {
+      await callback(event);
+      this.off(eventType, onceHandler);
+    };
+    this.on(eventType, onceHandler);
+  }
+
   async emit(event: ModifiableEvent): Promise<void> {
     console.log(`[EVENT DEBUG] === 이벤트 발생 ===`);
     console.log(`[EVENT DEBUG] 타입: ${event.type}`);
@@ -76,6 +92,11 @@ export class EventSystem {
       console.log(`[EVENT DEBUG] 핸들러 실행 전 데이터:`, event.data);
       await handler(event);
       console.log(`[EVENT DEBUG] 핸들러 실행 후 데이터:`, event.data);
+      
+      // 🆕 이벤트가 취소되면 중단
+      if (event.cancelled) {
+        break;
+      }
     }
     
     console.log(`[EVENT DEBUG] === 이벤트 완료 ===`);
@@ -101,7 +122,9 @@ export class EventSystem {
           isGhost: false,
           currentTurn: gameState.currentTurn,
           noDamageTurns: 0,
-          inactiveTurns: 0
+          inactiveTurns: 0,
+          isInvincible: false,
+          customFlags: new Map<string, any>()
         })),
         currentTurn: gameState.currentTurn,
         logs: [],

@@ -185,8 +185,6 @@ const App: React.FC = () => {
   };
 
   const handleActionSubmit = async (actions: PlayerAction[]) => {
-    console.log('[APP] === 턴 처리 시작 ===');
-    console.log('[APP] TurnProcessor 재사용 확인');
     console.log('[DEBUG] 입력된 행동:', actions);
 
     const gameState: GameState = {
@@ -202,11 +200,8 @@ const App: React.FC = () => {
 
     // TurnProcessor가 없으면 생성, 있으면 재사용
     if (!turnProcessorRef.current) {
-      console.log('[APP] TurnProcessor 새로 생성 중...');
-      turnProcessorRef.current = new TurnProcessor(gameState, eventSystemRef.current!);
-      console.log('[APP] TurnProcessor 생성 완료');
-    } else {
-      console.log('[APP] 기존 TurnProcessor 재사용');
+      // 기존 AbilityManager를 전달하여 중복 생성 방지
+      turnProcessorRef.current = new TurnProcessor(gameState, eventSystemRef.current!, abilityManagerRef.current!);
     }
     
     const result = await turnProcessorRef.current.processTurn(actions);
