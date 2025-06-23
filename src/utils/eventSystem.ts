@@ -30,6 +30,7 @@ export class EventSystem {
   private snapshots: GameSnapshot[];
   private currentIndex: number;
   private maxHistory: number;
+  private isDisposed: boolean = false;
 
   constructor() {
     this.handlers = new Map();
@@ -40,6 +41,11 @@ export class EventSystem {
   }
 
   on(eventType: GameEventType, handler: EventHandler): void {
+    if (this.isDisposed) {
+      console.warn('EventSystem이 dispose되었습니다.');
+      return;
+    }
+    
     console.log(`[EVENT REGISTER] 이벤트 핸들러 등록 시도: ${eventType}`);
     console.log(`[EVENT REGISTER] 호출 스택:`, new Error().stack);
     
@@ -60,8 +66,54 @@ export class EventSystem {
     }
   }
 
+  removeHandler(eventType: GameEventType, handler: EventHandler): void {
+    if (this.isDisposed) {
+      console.warn('EventSystem이 dispose되었습니다.');
+      return;
+    }
+    
+    const handlers = this.handlers.get(eventType);
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index !== -1) {
+        handlers.splice(index, 1);
+        console.log(`[EVENT SYSTEM] 핸들러 제거 완료: ${eventType}`);
+      }
+    }
+  }
+
+  removeAllHandlers(eventType?: GameEventType): void {
+    if (this.isDisposed) {
+      console.warn('EventSystem이 dispose되었습니다.');
+      return;
+    }
+    
+    if (eventType) {
+      this.handlers.delete(eventType);
+      console.log(`[EVENT SYSTEM] ${eventType} 모든 핸들러 제거 완료`);
+    } else {
+      this.handlers.clear();
+      console.log(`[EVENT SYSTEM] 모든 이벤트 핸들러 제거 완료`);
+    }
+  }
+
+  dispose(): void {
+    console.log(`[EVENT SYSTEM] EventSystem dispose 시작`);
+    this.handlers.clear();
+    this.eventHistory = [];
+    this.snapshots = [];
+    this.currentIndex = -1;
+    this.isDisposed = true;
+    console.log(`[EVENT SYSTEM] EventSystem dispose 완료`);
+  }
+
   // 🆕 다중 이벤트 타입 리스닝
   onMultiple(types: GameEventType[], callback: EventHandler): void {
+    if (this.isDisposed) {
+      console.warn('EventSystem이 dispose되었습니다.');
+      return;
+    }
+    
     for (const eventType of types) {
       this.on(eventType, callback);
     }
@@ -69,6 +121,11 @@ export class EventSystem {
 
   // 🆕 일회성 리스너
   once(eventType: GameEventType, callback: EventHandler): void {
+    if (this.isDisposed) {
+      console.warn('EventSystem이 dispose되었습니다.');
+      return;
+    }
+    
     const onceHandler = async (event: ModifiableEvent) => {
       await callback(event);
       this.off(eventType, onceHandler);
@@ -77,9 +134,14 @@ export class EventSystem {
   }
 
   async emit(event: ModifiableEvent): Promise<void> {
+    if (this.isDisposed) {
+      console.warn('EventSystem이 dispose되었습니다.');
+      return;
+    }
+    
     console.log(`[EVENT DEBUG] === 이벤트 발생 ===`);
     console.log(`[EVENT DEBUG] 타입: ${event.type}`);
-    console.log(`[EVENT DEBUG] 데이터:`, event.data);
+    console.log(`[EVENT DEBUG] 데이터:`, event.data as any);
     
     // 이벤트 히스토리에 추가
     this.eventHistory.push(event);
@@ -89,9 +151,9 @@ export class EventSystem {
     console.log(`[EVENT DEBUG] 핸들러 수: ${handlers.length}`);
     
     for (const handler of handlers) {
-      console.log(`[EVENT DEBUG] 핸들러 실행 전 데이터:`, event.data);
+      console.log(`[EVENT DEBUG] 핸들러 실행 전 데이터:`, event.data as any);
       await handler(event);
-      console.log(`[EVENT DEBUG] 핸들러 실행 후 데이터:`, event.data);
+      console.log(`[EVENT DEBUG] 핸들러 실행 후 데이터:`, event.data as any);
       
       // 🆕 이벤트가 취소되면 중단
       if (event.cancelled) {

@@ -10,14 +10,22 @@ export type ActionType = 'ATTACK' | 'DEFEND' | 'ABILITY' | 'PASS' | 'EVADE';
 
 // 🆕 상태이상 시스템
 export interface StatusEffect {
-  id: string;
+  id: StatusEffectId; // 🔧 string → StatusEffectId
   name: string;
   description: string;
   duration: number; // -1이면 영구
   stackable: boolean;
   type: 'buff' | 'debuff' | 'neutral';
-  stacks?: number; // 중첩 가능한 경우
+  stacks: number; // 🔧 optional 제거
+  maxStacks?: number; // 🆕 최대 중첩 수
   source?: number; // 상태이상을 준 플레이어 ID
+  
+  // 🆕 이벤트 핸들러 추가
+  onApply?: (playerId: number, stacks: number) => void;
+  onRemove?: (playerId: number, stacks: number) => void;
+  onTurnStart?: (playerId: number, stacks: number) => void;
+  onTurnEnd?: (playerId: number, stacks: number) => void;
+  onDamageReceived?: (playerId: number, damage: number) => number; // 데미지 수정
 }
 
 export interface PlayerAction {
@@ -25,6 +33,11 @@ export interface PlayerAction {
   targetId: number;
   actionType: ActionType;
   abilityId?: string;
+  
+  // 🆕 행동 수정을 위한 속성들
+  damage?: number;
+  defenseGauge?: number;
+  evadeCount?: number;
   
   // 🆕 특수 입력 지원
   additionalTargets?: number[];  // 동기화용
@@ -121,13 +134,13 @@ export interface TurnResult {
   isDeathZone: boolean;
 }
 
-export interface ModifiableEvent {
+export interface ModifiableEvent<T = unknown> {
   type: GameEventType;
   timestamp: number;
-  data: any;
+  data: T;
   cancelled: boolean;
   modified: boolean;
-  preventDefault?: () => void; // 🆕 추가
+  preventDefault?: () => void;
 }
 
 export interface GameEvent extends ModifiableEvent {
@@ -354,6 +367,39 @@ export interface AbilityChainEvent {
   triggerAbility: string;
 }
 
+// 🆕 추가 이벤트 타입들
+export interface FocusAttackEvent {
+  attacker: number;
+  target: number;
+  damage: number;
+}
+
+export interface StatChangeEvent {
+  player: number;
+  stat: string;
+  oldValue: number;
+  newValue: number;
+  reason?: string;
+}
+
+export interface StatusChangeEvent {
+  player: number;
+  oldStatus: string;
+  newStatus: string;
+}
+
+export interface AbilityUseEvent {
+  player: number;
+  abilityId: string;
+  target?: number;
+}
+
+export interface AbilityEffectEvent {
+  player: number;
+  abilityId: string;
+  effect: any;
+}
+
 // 🆕 이벤트 데이터 타입 매핑
 export type EventDataMap = {
   [GameEventType.TURN_START]: TurnStartEvent;
@@ -368,9 +414,31 @@ export type EventDataMap = {
   [GameEventType.STATUS_EFFECT_APPLIED]: StatusEffectEvent;
   [GameEventType.STATUS_EFFECT_REMOVED]: StatusEffectEvent;
   [GameEventType.ABILITY_CHAIN_TRIGGERED]: AbilityChainEvent;
+  [GameEventType.FOCUS_ATTACK]: FocusAttackEvent;
+  [GameEventType.HP_CHANGE]: StatChangeEvent;
+  [GameEventType.STAT_CHANGE]: StatChangeEvent;
+  [GameEventType.STATUS_CHANGE]: StatusChangeEvent;
+  [GameEventType.ABILITY_USE]: AbilityUseEvent;
+  [GameEventType.ABILITY_EFFECT]: AbilityEffectEvent;
 }
 
 // 🆕 타입 안전한 ModifiableEvent
 export interface TypedModifiableEvent<T = any> extends ModifiableEvent {
   data: T;
-} 
+}
+
+// 🆕 능력 ID 유니온 타입 추가
+export type AbilityId = 
+  | 'multipleStrike' | 'sniperRifle' | 'quantumization' | 'woundAnalysis'
+  | 'shadowInDarkness' | 'synchronize' | 'endOfDestruction' | 'painfulMemory'
+  | 'swiftCounter' | 'discordDissonance' | 'liveToDie' | 'greatFailure'
+  | 'weaponBreak' | 'ghostSummoning' | 'confusion' | 'preemptivePrediction'
+  | 'targetManipulation' | 'suppressedFreedom' | 'alzheimer' | 'unseeable'
+  | 'willLoss' | 'fallenCrown' | 'fateCross' | 'burningEmbers'
+  | 'annihilation' | 'playingDead' | 'judge';
+
+// 🆕 상태이상 ID 타입
+export type StatusEffectId = 
+  | 'crack' | 'doom_sign' | 'will_loss' | 'damage_reduction' 
+  | 'damage_increase' | 'ability_seal' | 'action_seal' | 'ghost'
+  | 'emphasized' | 'pass_coin'; 

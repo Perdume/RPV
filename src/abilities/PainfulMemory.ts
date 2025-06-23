@@ -1,130 +1,126 @@
 import { BaseAbility } from './BaseAbility';
-import { AbilityContext, TypedModifiableEvent, TurnStartEvent, AttackEvent } from '../types/game.types';
+import { AbilityContext, Player, ModifiableEvent, AttackEvent } from '../types/game.types';
 
 export class PainfulMemory extends BaseAbility {
+  private consecutiveNonAttackTurns: number = 0;
+  private lastTurnHpReduction: number = 0;
+  private deathResistanceUsed: boolean = false;
+
   constructor() {
-    super('painfulMemory', '잠식되는 고통의 기억', '이 고통을.. 나만 겪을 순 없잖아? 이번 턴 이하의 효과 적용. 0~4중 임의의 체력 감소. 체력 1 이하로 감소하지 않음. 공격 성공시 타겟에게 "균열" 상태이상 부여. 다음 턴 "가하는 피해 1 증가" 얻음. 다음 턴 자신의 능력이 봉인됨.', 0, 3);
+    super('painfulMemory', '잠식되는 고통의 기억', '복잡한 패시브 효과를 가진 능력입니다.', 0, 3);
   }
 
   async execute(context: AbilityContext, parameters: Record<string, any> = {}): Promise<{ success: boolean; message: string; damage?: number; heal?: number; death?: boolean; target?: number }> {
-    // 0~4중 임의의 체력 감소
-    const damageAmount = Math.floor(Math.random() * 5);
+    // 0~4 중 임의의 체력 감소
+    const hpReduction = Math.floor(Math.random() * 5);
     const player = context.player;
     
     if (player) {
-      const oldHp = player.hp;
-      player.hp = Math.max(1, player.hp - damageAmount); // 체력 1 이하로 감소하지 않음
-      const actualDamage = oldHp - player.hp;
+      // 체력 1 이하로 감소하지 않음
+      const newHp = Math.max(1, player.hp - hpReduction);
+      const actualReduction = player.hp - newHp;
+      player.hp = newHp;
       
       // 이번 턴 효과 적용
-      this.setTurn('pain_active', true, context.currentTurn);
       this.setTurn('crack_on_attack', true, context.currentTurn);
-      this.setTurn('next_turn_damage_boost', true, context.currentTurn + 1);
-      this.setTurn('next_turn_ability_seal', true, context.currentTurn + 1);
+      this.setTurn('damage_boost_next_turn', true, context.currentTurn);
+      this.setTurn('ability_seal_next_turn', true, context.currentTurn);
       
+      // 다음 턴 가하는 피해 1 증가
+      this.setSession('damage_boost_next_turn', {
+        turn: context.currentTurn + 1,
+        amount: 1
+      });
+      
+      // 다음 턴 능력 봉인
+      this.setSession('ability_seal_next_turn', {
+        turn: context.currentTurn + 1
+      });
+
       return {
         success: true,
-        message: `${this.name} 능력을 사용했습니다. 체력이 ${actualDamage} 감소했습니다.`,
-        damage: 0,
-        heal: 0,
-        death: false
+        message: `${player.name}이(가) 고통의 기억을 발동합니다! 체력 ${actualReduction} 감소`,
+        target: player.id
       };
     }
+
+    return { success: false, message: '플레이어를 찾을 수 없습니다.' };
+  }
+
+  // 패시브: 턴 시작시 모든 효과 적용
+  async onTurnStart(event: ModifiableEvent): Promise<void> {
+    const currentTurn = this.getSession('current_turn') as number || 0;
+    const player = this.getOwnerPlayer();
     
-    return {
-      success: false,
-      message: '플레이어를 찾을 수 없습니다.',
-      damage: 0,
-      heal: 0,
-      death: false
-    };
-  }
-
-  // 패시브 1: 연속 2턴째 공격 행동을 하지 않았다면, 매 턴 시작시 체력이 1 감소합니다
-  async onTurnStart(event: TypedModifiableEvent<TurnStartEvent>): Promise<void> {
-    const turn = event.data.turn;
-    if (turn >= 3) { // 3번째 턴부터 적용
-      const consecutiveNonAttackTurns = this.getSession('consecutive_non_attack_turns') as number || 0;
+    if (player && player.actionType !== 'ATTACK') {
+      this.consecutiveNonAttackTurns++;
       
-      if (consecutiveNonAttackTurns >= 2) {
-        const player = event.data.players?.find((p: any) => p.id === this.ownerId);
-        if (player) {
-          player.hp = Math.max(1, player.hp - 1); // 체력 1 이하로 감소하지 않음
-          console.log(`[고통의 기억] ${this.ownerId}이(가) 연속 공격하지 않아 체력이 1 감소합니다!`);
-        }
+      if (this.consecutiveNonAttackTurns >= 2) {
+        player.hp = Math.max(1, player.hp - 1);
+        this.lastTurnHpReduction = 1;
+        console.log(`[고통의 기억] ${player.name} 연속 ${this.consecutiveNonAttackTurns}턴 공격하지 않아 체력 1 감소`);
       }
+    } else if (player && player.actionType === 'ATTACK') {
+      this.consecutiveNonAttackTurns = 0;
+    }
+    
+    // 패시브 2: 3번째 턴부터 적용. 이전 턴 감소한 체력 만큼 이번 턴 "가하는 피해 증가"를 얻음 (최대 4)
+    if (currentTurn >= 3 && this.lastTurnHpReduction > 0) {
+      const damageBoost = Math.min(this.lastTurnHpReduction, 4);
+      this.setTurn('damage_boost', damageBoost, currentTurn);
+      console.log(`[고통의 기억] ${this.ownerId} 이전 턴 체력 감소로 피해 증가 ${damageBoost} 획득`);
+      this.lastTurnHpReduction = 0;
     }
   }
 
-  // 패시브 2: 3번째 턴부터 적용됩니다. 이전 턴 감소한 체력 만큼 이번 턴 "가하는 피해 증가"를 얻습니다. (최대 4)
-  async onTurnStart(event: TypedModifiableEvent<TurnStartEvent>): Promise<void> {
-    const turn = event.data.turn;
-    if (turn >= 3) {
-      const lastTurnDamage = this.getSession('last_turn_damage') as number || 0;
-      const damageBoost = Math.min(lastTurnDamage, 4);
-      
-      if (damageBoost > 0) {
-        this.setTurn('damage_boost', damageBoost, turn);
-        console.log(`[고통의 기억] ${this.ownerId}이(가) 이전 턴 피해로 인해 피해가 ${damageBoost} 증가합니다!`);
-      }
-    }
-  }
-
-  // 패시브 3: 다른 플레이어가 탈락하면, 이번 턴 자신은 탈락을 저항하고 (1 이하로 감소하지 않음) 다음 턴 체력을 [2 + 현재 탈락한 플레이어 수] 만큼 회복합니다
-  async onDeath(event: any): Promise<void> {
-    if (event.data.player !== this.ownerId) {
-      const gameUsed = this.getSession('death_resistance_used') as boolean || false;
-      
-      if (!gameUsed) {
-        this.setSession('death_resistance_used', true);
-        this.setTurn('death_resistance', true, event.data.turn);
-        this.setTurn('next_turn_heal', true, event.data.turn + 1);
+  // 패시브 3: 다른 플레이어가 탈락하면, 이번 턴 자신은 탈락을 저항하고 다음 턴 체력 회복
+  async onPlayerDeath(event: ModifiableEvent): Promise<void> {
+    if (!this.deathResistanceUsed) {
+      const deadPlayerId = (event.data as any).playerId;
+      if (deadPlayerId !== this.ownerId) {
+        this.deathResistanceUsed = true;
         
-        console.log(`[고통의 기억] ${this.ownerId}이(가) 다른 플레이어의 죽음으로 인해 탈락 저항을 활성화합니다!`);
-      }
-    }
-  }
-
-  // 공격 성공시 타겟에게 "균열" 상태이상 부여
-  async onAfterAttack(event: TypedModifiableEvent<AttackEvent>): Promise<void> {
-    if (this.getTurn('crack_on_attack', this.getCurrentTurn()) && event.data.attacker === this.ownerId && event.data.attackSuccess) {
-      const target = event.data.targetPlayer;
-      if (target) {
-        this.applyStatusEffect(target.id, {
-          id: 'crack',
-          name: '균열',
-          description: '턴 종료시 수치가 3 이상이라면 피해를 1 받고 제거됩니다.',
-          duration: 3,
-          stackable: true,
-          type: 'debuff'
+        // 이번 턴 탈락 저항 (1 이하로 감소하지 않음)
+        this.setTurn('death_resistance', true, this.getSession('current_turn') as number || 0);
+        
+        // 다음 턴 체력 회복 [2 + 현재 탈락한 플레이어 수]
+        const deadPlayersCount = this.getSession('dead_players_count') as number || 0;
+        const healAmount = 2 + deadPlayersCount;
+        
+        this.setSession('heal_next_turn', {
+          turn: (this.getSession('current_turn') as number || 0) + 1,
+          amount: healAmount
         });
-        console.log(`[고통의 기억] ${this.ownerId}이(가) ${target.id}에게 균열을 가합니다!`);
+        
+        console.log(`[고통의 기억] ${this.ownerId} 탈락 저항 활성화, 다음 턴 체력 ${healAmount} 회복`);
       }
     }
   }
 
-  // 다음 턴 "가하는 피해 1 증가" 얻음
-  async onTurnStart(event: TypedModifiableEvent<TurnStartEvent>): Promise<void> {
-    const turn = event.data.turn;
-    if (this.getTurn('next_turn_damage_boost', turn)) {
-      this.setTurn('damage_boost', 1, turn);
-      console.log(`[고통의 기억] ${this.ownerId}이(가) 다음 턴 피해 증가를 얻습니다!`);
-    }
-  }
-
-  // 다음 턴 자신의 능력이 봉인됨
-  async onTurnStart(event: TypedModifiableEvent<TurnStartEvent>): Promise<void> {
-    const turn = event.data.turn;
-    if (this.getTurn('next_turn_ability_seal', turn)) {
-      const player = event.data.players?.find((p: any) => p.id === this.ownerId);
-      if (player) {
-        player.isAbilitySealed = true;
-        console.log(`[고통의 기억] ${this.ownerId}의 능력이 봉인됩니다!`);
+  // 공격 성공시 타겟에게 균열 부여
+  async onAfterAttack(event: ModifiableEvent): Promise<void> {
+    const currentTurn = this.getSession('current_turn') as number || 0;
+    const data = event.data as AttackEvent;
+    
+    if (this.getTurn('crack_on_attack', currentTurn) && data.attacker === this.ownerId && data.attackSuccess) {
+      const target = data.targetPlayer;
+      if (target) {
+        this.applyStatusEffect(target.id, 'crack', 3, 1);
+        console.log(`[고통의 기억] ${target.name}에게 균열 부여`);
       }
     }
   }
 
-  private getCurrentTurn(): number {
-    return (this.getSession('current_turn') as number) || 0;
+  // 다음 턴 가하는 피해 증가
+  async onBeforeAttack(event: ModifiableEvent): Promise<void> {
+    const currentTurn = this.getSession('current_turn') as number || 0;
+    const data = event.data as AttackEvent;
+    
+    if (this.getTurn('damage_boost', currentTurn) && data.attacker === this.ownerId) {
+      const boostAmount = this.getTurn('damage_boost', currentTurn) as number;
+      data.newDamage = (data.newDamage || data.damage) + boostAmount;
+      event.modified = true;
+      console.log(`[고통의 기억] ${this.ownerId} 피해 증가 ${boostAmount} 적용`);
+    }
   }
 } 

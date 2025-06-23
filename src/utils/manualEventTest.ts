@@ -27,7 +27,7 @@ window.testEvents = async function() {
   Object.values(GameEventType).forEach(eventType => {
     eventSystem.on(eventType, async (event: ModifiableEvent) => {
       capturedEvents.push(event);
-      console.log(`📡 [${eventType}]`, event.data);
+      console.log(`📡 [${eventType}]`, event.data as any);
     });
   });
 
@@ -146,7 +146,7 @@ window.testRollback = async function() {
   [GameEventType.ATTACK_ACTION, GameEventType.DEFEND_ACTION, GameEventType.EVADE_ACTION, GameEventType.DEATH].forEach(eventType => {
     eventSystem.on(eventType, async (event: ModifiableEvent) => {
       eventCount++;
-      console.log(`⚡ [${eventCount}] ${eventType}:`, event.data);
+      console.log(`⚡ [${eventCount}] ${eventType}:`, event.data as any);
     });
   });
 
@@ -277,7 +277,7 @@ window.testRedo = async function() {
   [GameEventType.ATTACK_ACTION, GameEventType.DEFEND_ACTION, GameEventType.EVADE_ACTION, GameEventType.DEATH].forEach(eventType => {
     eventSystem.on(eventType, async (event: ModifiableEvent) => {
       eventCount++;
-      console.log(`⚡ [${eventCount}] ${eventType}:`, event.data);
+      console.log(`⚡ [${eventCount}] ${eventType}:`, event.data as any);
     });
   });
 

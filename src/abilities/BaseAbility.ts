@@ -1,4 +1,4 @@
-import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext, StatusEffect } from '../types/game.types';
+import { Player, PlayerStatus, Ability, ModifiableEvent, AbilityContext, StatusEffect, StatusEffectId } from '../types/game.types';
 import { AbilityManager } from './AbilityManager';
 import { DataManager } from '../utils/DataManager';
 import { StatusEffectManager } from '../utils/StatusEffectManager';
@@ -222,22 +222,26 @@ export abstract class BaseAbility implements Ability {
   // === 🆕 상태이상 관리 시스템 ===
   
   // 상태이상 적용
-  protected applyStatusEffect(targetId: number, effectId: string, duration: number = 1, stacks: number = 1): boolean {
+  protected applyStatusEffect(targetId: number, effectId: StatusEffectId, duration: number = 1, stacks: number = 1): boolean {
+    if (!this.abilityManager) {
+      console.error(`[${this.id}] AbilityManager not set`);
+      return false;
+    }
+
+    const statusEffectManager = StatusEffectManager.getInstanceWithEventSystem(this.abilityManager.getEventSystem());
+    
+    const effect: StatusEffect = {
+      id: effectId,
+      name: effectId,
+      description: `Applied by ${this.name}`,
+      duration,
+      stackable: true,
+      type: 'debuff',
+      stacks
+    };
+
     try {
-      const statusManager = StatusEffectManager.getInstance();
-      const effect: StatusEffect = {
-        id: effectId,
-        name: effectId,
-        description: `${effectId} 상태이상`,
-        duration,
-        stackable: true,
-        type: 'debuff',
-        stacks,
-        source: this.ownerId || undefined
-      };
-      
-      statusManager.applyStatusEffect(targetId, effect);
-      this.statusEffects.set(effectId, effect);
+      statusEffectManager.applyStatusEffect(targetId, effect.id as StatusEffectId, effect.duration, effect.stacks);
       return true;
     } catch (error) {
       console.error(`[${this.id}] 상태이상 적용 실패:`, error);

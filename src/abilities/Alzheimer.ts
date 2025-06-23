@@ -19,7 +19,10 @@ export class Alzheimer extends BaseAbility {
     }
 
     // 이번 턴 전체 로그에 행동하지 않은 것으로 기록
-    this.setTurn('action_hidden', true, context.currentTurn);
+    const turnProcessor = (context as any).turnProcessor;
+    if (turnProcessor && this.ownerId) {
+      turnProcessor.hidePlayerAction(this.ownerId, context.currentTurn);
+    }
 
     // 다음 턴 무작위 두 종류의 상태이상 적용
     const debuffs = [

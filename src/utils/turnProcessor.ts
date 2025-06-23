@@ -11,19 +11,21 @@ import {
   GameEventType,
   GameSnapshot,
   GameSessionData,
-  StatusEffect
+  StatusEffect,
+  AttackEvent
 } from '../types/game.types';
 import { EventSystem } from '../utils/eventSystem';
 import { AbilityManager } from '../abilities/AbilityManager';
 import { StatusEffectManager } from './StatusEffectManager';
 import { DataManager } from './DataManager';
+import { GameLogger } from './GameLogger';
 
 const DEATH_ZONE_TURN = 5;
 
 export class TurnProcessor {
   private gameState: GameState;
   private eventSystem: EventSystem;
-  private abilityManager: AbilityManager;
+  private abilityManager!: AbilityManager; // 🔧 수정: definite assignment assertion
   private statusEffectManager: StatusEffectManager;
   private debugLogs: string[];
   private lastTurnHpChanges: Map<number, number> = new Map(); // 턴 시작 시 체력 기록용
@@ -45,22 +47,54 @@ export class TurnProcessor {
   private errorThreshold: number = 5; // 에러 임계값
   private isProcessingEnabled: boolean = true; // 처리 활성화 상태
 
+  private gameLogger: GameLogger = new GameLogger();
+
   constructor(gameState: GameState, eventSystem: EventSystem, abilityManager?: AbilityManager) {
     this.gameState = gameState;
     this.eventSystem = eventSystem;
     this.debugLogs = [];
     this.statusEffectManager = StatusEffectManager.getInstance();
     
-    // 외부에서 AbilityManager를 받으면 사용, 없으면 새로 생성
+    // 🔧 AbilityManager 지연 초기화
     if (abilityManager) {
       this.abilityManager = abilityManager;
     } else {
-    this.abilityManager = new AbilityManager(this.eventSystem);
+      this.initializeAbilityManager();
     }
     
     this.syncGameState();
     this.assignPlayerAbilities();
     this.setupEventListeners();
+  }
+
+  // 🆕 AbilityManager 초기화 메서드
+  private initializeAbilityManager(): void {
+    this.abilityManager = new AbilityManager(this.eventSystem);
+  }
+
+  // 🆕 정리 메서드 추가
+  dispose(): void {
+    console.log(`[TURN PROCESSOR] TurnProcessor dispose 시작`);
+    
+    // AbilityManager 정리
+    this.abilityManager?.dispose();
+    
+    // StatusEffectManager 정리
+    this.statusEffectManager.clearAllStatusEffects();
+    
+    // 데이터 정리
+    this.lastTurnHpChanges.clear();
+    this.debugLogs = [];
+    
+    // 성능 메트릭 리셋
+    this.performanceMetrics = {
+      totalTurns: 0,
+      averageTurnTime: 0,
+      errorCount: 0,
+      lastTurnTimestamp: 0
+    };
+    
+    console.log(`[TURN PROCESSOR] TurnProcessor dispose 완료`);
   }
 
   private setupEventListeners(): void {
@@ -110,6 +144,9 @@ export class TurnProcessor {
   // 🆕 턴 시작 효과 처리
   private async processTurnStartEffects(): Promise<void> {
     try {
+      // 🆕 상태이상 턴 시작 처리 추가
+      this.statusEffectManager.processTurnStart(this.gameState.currentTurn);
+      
       // 상태이상 턴 시작 효과 처리
       for (const player of this.gameState.players) {
         const effects = this.statusEffectManager.getPlayerStatusEffects(player.id);
@@ -125,6 +162,9 @@ export class TurnProcessor {
   // 🆕 턴 종료 효과 처리
   private async processTurnEndEffects(): Promise<void> {
     try {
+      // 🆕 상태이상 턴 종료 처리 추가
+      this.statusEffectManager.processTurnEnd(this.gameState.currentTurn);
+      
       // 상태이상 턴 종료 효과 처리
       for (const player of this.gameState.players) {
         const effects = this.statusEffectManager.getPlayerStatusEffects(player.id);
@@ -144,19 +184,17 @@ export class TurnProcessor {
   // 🆕 상태이상 턴 시작 효과 적용
   private async applyStatusEffectTurnStart(player: Player, effect: StatusEffect): Promise<void> {
     switch (effect.id) {
-      case 'regen':
-        // 재생 효과
-        if (player.hp < player.maxHp) {
-          const healAmount = Math.min(2 * (effect.stacks || 1), player.maxHp - player.hp);
-          player.hp += healAmount;
-          console.log(`[상태이상] ${player.name} 재생 효과: +${healAmount} HP`);
-        }
+      case 'damage_reduction':
+        // 피해 감소 효과
+        console.log(`[상태이상] ${player.name} 피해 감소 효과 적용`);
         break;
-      case 'poison':
-        // 독 효과
-        const poisonDamage = 1 * (effect.stacks || 1);
-        player.hp = Math.max(0, player.hp - poisonDamage);
-        console.log(`[상태이상] ${player.name} 독 효과: -${poisonDamage} HP`);
+      case 'damage_increase':
+        // 피해 증가 효과
+        console.log(`[상태이상] ${player.name} 피해 증가 효과 적용`);
+        break;
+      case 'will_loss':
+        // 전의 상실 효과
+        console.log(`[상태이상] ${player.name} 전의 상실 효과 적용`);
         break;
     }
   }
@@ -164,36 +202,36 @@ export class TurnProcessor {
   // 🆕 상태이상 턴 종료 효과 적용
   private async applyStatusEffectTurnEnd(player: Player, effect: StatusEffect): Promise<void> {
     switch (effect.id) {
-      case 'weaken':
-        // 약화 효과 (공격력 감소)
-        player.attack = Math.max(1, player.attack - (effect.stacks || 1));
+      case 'crack':
+        // 균열 효과
+        console.log(`[상태이상] ${player.name} 균열 효과 처리`);
         break;
-      case 'strengthen':
-        // 강화 효과 (공격력 증가)
-        player.attack += effect.stacks || 1;
+      case 'doom_sign':
+        // 파멸의 징조 효과
+        console.log(`[상태이상] ${player.name} 파멸의 징조 효과 처리`);
         break;
     }
   }
   
   // 🆕 상태이상 적용 이벤트 처리
   private async handleStatusEffectApplied(event: ModifiableEvent): Promise<void> {
-    const { targetId, effectId, duration, stacks } = event.data;
-    console.log(`[이벤트] 상태이상 적용: 플레이어 ${targetId}에 ${effectId} (${duration}턴, ${stacks}중첩)`);
+    const data = event.data as { targetId: number; effectId: string; duration: number; stacks: number };
+    console.log(`[이벤트] 상태이상 적용: 플레이어 ${data.targetId}에 ${data.effectId} (${data.duration}턴, ${data.stacks}중첩)`);
   }
   
   // 🆕 상태이상 제거 이벤트 처리
   private async handleStatusEffectRemoved(event: ModifiableEvent): Promise<void> {
-    const { targetId, effectId } = event.data;
-    console.log(`[이벤트] 상태이상 제거: 플레이어 ${targetId}에서 ${effectId}`);
+    const data = event.data as { targetId: number; effectId: string };
+    console.log(`[이벤트] 상태이상 제거: 플레이어 ${data.targetId}에서 ${data.effectId}`);
   }
   
   // 🆕 능력 체인 트리거 이벤트 처리
   private async handleAbilityChainTriggered(event: ModifiableEvent): Promise<void> {
-    const { chainId, triggerAbility } = event.data;
-    console.log(`[이벤트] 능력 체인 트리거: ${chainId} (트리거: ${triggerAbility})`);
+    const data = event.data as { chainId: string; triggerAbility: string };
+    console.log(`[이벤트] 능력 체인 트리거: ${data.chainId} (트리거: ${data.triggerAbility})`);
     
     // 능력 체인 실행
-    await this.abilityManager.executeAbilityChain(chainId, event);
+    await this.abilityManager.executeAbilityChain(data.chainId, event);
   }
   
   // 🆕 에러 처리
@@ -530,11 +568,11 @@ export class TurnProcessor {
     }
 
     let finalTarget = target;
-    let finalDamage = beforeAttackEvent.data.damage;
+    let finalDamage = (beforeAttackEvent.data as AttackEvent).damage;
 
     // 타겟 변경 체크
-    if (beforeAttackEvent.modified && beforeAttackEvent.data.newTarget) {
-      const newTarget = this.gameState.players.find(p => p.id === beforeAttackEvent.data.newTarget);
+    if (beforeAttackEvent.modified && (beforeAttackEvent.data as AttackEvent).newTarget) {
+      const newTarget = this.gameState.players.find(p => p.id === (beforeAttackEvent.data as AttackEvent).newTarget);
       if (newTarget) {
         finalTarget = newTarget;
         console.log(`[공격 처리] 타겟이 ${target.name}에서 ${finalTarget.name}으로 변경되었습니다.`);
@@ -542,13 +580,14 @@ export class TurnProcessor {
     }
 
     // 데미지 변경 체크
-    if (beforeAttackEvent.modified && beforeAttackEvent.data.newDamage !== undefined) {
-      finalDamage = beforeAttackEvent.data.newDamage;
-      console.log(`[공격 처리] 데미지가 ${beforeAttackEvent.data.damage}에서 ${finalDamage}으로 변경되었습니다.`);
+    if (beforeAttackEvent.modified && (beforeAttackEvent.data as AttackEvent).newDamage !== undefined) {
+      const newDamage = (beforeAttackEvent.data as AttackEvent).newDamage;
+      finalDamage = newDamage!;
+      console.log(`[공격 처리] 데미지가 ${(beforeAttackEvent.data as AttackEvent).damage}에서 ${finalDamage}으로 변경되었습니다.`);
     }
 
     // 공격 성공 여부 체크
-    if (beforeAttackEvent.modified && beforeAttackEvent.data.attackSuccess === false) {
+    if (beforeAttackEvent.modified && (beforeAttackEvent.data as AttackEvent).attackSuccess === false) {
       console.log(`[공격 처리] ${attacker.name}의 공격이 실패했습니다.`);
       logs.push(`${attacker.name}의 공격이 실패했습니다.`);
       return;
@@ -1066,5 +1105,25 @@ export class TurnProcessor {
     };
     
     await this.eventSystem.emit(event);
+  }
+
+  // 로그 포맷 메서드
+  private formatActionForLog(action: PlayerAction, turn: number): string {
+    return this.gameLogger.formatAction(action, turn);
+  }
+
+  // 행동 숨김
+  public hidePlayerAction(playerId: number, turn: number): void {
+    this.gameLogger.hidePlayerAction(playerId, turn);
+  }
+
+  // 가짜 행동 기록
+  public recordFakeAction(playerId: number, turn: number, fakeAction: string): void {
+    this.gameLogger.recordFakeAction(playerId, turn, fakeAction);
+  }
+
+  // 능력 사용 공개
+  public revealAbilityUse(playerId: number, turn: number): void {
+    this.gameLogger.revealAbilityUse(playerId, turn);
   }
 }

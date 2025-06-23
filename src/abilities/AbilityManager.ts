@@ -3,11 +3,42 @@ import { GameEventType, ModifiableEvent, Ability, Player, AbilityContext } from 
 import { BaseAbility } from './BaseAbility';
 import { StatusEffectManager } from '../utils/StatusEffectManager';
 
+// 🆕 정적 import로 변경
+import { MultipleStrike } from './MultipleStrike';
+import { SniperRifle } from './SniperRifle';
+import { Quantumization } from './Quantumization';
+import { SwiftCounter } from './SwiftCounter';
+import { Alzheimer } from './Alzheimer';
+import { Judge } from './Judge';
+import { Synchronize } from './Synchronize';
+import { GhostSummoning } from './GhostSummoning';
+import { Confusion } from './Confusion';
+import { WeaponBreak } from './WeaponBreak';
+import { PreemptivePrediction } from './PreemptivePrediction';
+import { DiscordDissonance } from './DiscordDissonance';
+import { EndOfDestruction } from './EndOfDestruction';
+import { GreatFailure } from './GreatFailure';
+import { LiveToDie } from './LiveToDie';
+import { PainfulMemory } from './PainfulMemory';
+import { ShadowInDarkness } from './ShadowInDarkness';
+import { WoundAnalysis } from './WoundAnalysis';
+import { TargetManipulation } from './TargetManipulation';
+import { SuppressedFreedom } from './SuppressedFreedom';
+import { Unseeable } from './Unseeable';
+import { WillLoss } from './WillLoss';
+import { FallenCrown } from './FallenCrown';
+import { FateCross } from './FateCross';
+import { BurningEmbers } from './BurningEmbers';
+import { Annihilation } from './Annihilation';
+import { PlayingDead } from './PlayingDead';
+
 export class AbilityManager {
+  private static instance: AbilityManager | null = null; // 🔧 추가: singleton 인스턴스
+  
   private abilities: Map<string, Ability> = new Map();
   private playerAbilities: Map<number, BaseAbility> = new Map();
   private gameState: { players: Player[] } | null = null;
-  private eventSystem: EventSystem;
+  private eventSystem!: EventSystem; // 🔧 수정: definite assignment assertion
   private logs: string[] = [];
   private variables: Map<string, any> = new Map();
   private currentTurn: number = 0;
@@ -34,52 +65,174 @@ export class AbilityManager {
   private disabledAbilities: Set<string> = new Set(); // 비활성화된 능력들
 
   constructor(eventSystem: EventSystem) {
+    // 🔧 중복 생성 방지
+    if (AbilityManager.instance) {
+      console.warn('AbilityManager는 이미 인스턴스가 존재합니다.');
+      return AbilityManager.instance;
+    }
+    
     this.eventSystem = eventSystem;
     
     this.registerDefaultAbilities();
     this.setupEventHandlers();
+    
+    AbilityManager.instance = this;
+  }
+
+  // 🆕 정리 메서드 추가
+  dispose(): void {
+    console.log(`[ABILITY MANAGER] AbilityManager dispose 시작`);
+    
+    // 이벤트 핸들러 제거
+    if (this.eventSystem) {
+      this.eventSystem.removeAllHandlers();
+    }
+    
+    // 데이터 정리
+    this.playerAbilities.clear();
+    this.gameState = null;
+    this.disabledAbilities.clear();
+    this.abilities.clear();
+    this.logs = [];
+    this.variables.clear();
+    this.players.clear();
+    this.abilityChains.clear();
+    this.executionQueue = [];
+    
+    // 성능 메트릭 리셋
+    this.performanceMetrics = {
+      totalExecutions: 0,
+      averageExecutionTime: 0,
+      errorCount: 0,
+      lastExecutionTimestamp: 0
+    };
+    
+    // 핸들러 설정 상태 리셋
+    this.isHandlersSetup = false;
+    
+    // singleton 인스턴스 제거
+    AbilityManager.instance = null;
+    
+    console.log(`[ABILITY MANAGER] AbilityManager dispose 완료`);
   }
 
   private registerDefaultAbilities(): void {
-    // 🆕 Phase 4: ABILITY.md 능력들 등록 (실제 존재하는 파일들만)
-    import('./MultipleStrike').then(module => {
-      const multipleStrike = new module.MultipleStrike();
-      this.abilities.set('multipleStrike', multipleStrike);
+    // 🆕 Phase 4: ABILITY.md 능력들 등록 (정적 import)
+    this.abilities.set('multipleStrike', new MultipleStrike());
+    this.abilities.set('sniperRifle', new SniperRifle());
+    this.abilities.set('quantumization', new Quantumization());
+    this.abilities.set('swiftCounter', new SwiftCounter());
+    this.abilities.set('alzheimer', new Alzheimer());
+    this.abilities.set('judge', new Judge());
+    this.abilities.set('synchronize', new Synchronize());
+    this.abilities.set('ghostSummoning', new GhostSummoning());
+    this.abilities.set('confusion', new Confusion());
+    this.abilities.set('weaponBreak', new WeaponBreak());
+    this.abilities.set('preemptivePrediction', new PreemptivePrediction());
+    this.abilities.set('discordDissonance', new DiscordDissonance());
+    this.abilities.set('endOfDestruction', new EndOfDestruction());
+    this.abilities.set('greatFailure', new GreatFailure());
+    this.abilities.set('liveToDie', new LiveToDie());
+    this.abilities.set('painfulMemory', new PainfulMemory());
+    this.abilities.set('shadowInDarkness', new ShadowInDarkness());
+    this.abilities.set('woundAnalysis', new WoundAnalysis());
+    
+    // 🆕 Phase 5: 새로 구현한 능력들
+    this.abilities.set('targetManipulation', new TargetManipulation());
+    this.abilities.set('suppressedFreedom', new SuppressedFreedom());
+    this.abilities.set('unseeable', new Unseeable());
+    this.abilities.set('willLoss', new WillLoss());
+    this.abilities.set('fallenCrown', new FallenCrown());
+    this.abilities.set('fateCross', new FateCross());
+    this.abilities.set('burningEmbers', new BurningEmbers());
+    this.abilities.set('annihilation', new Annihilation());
+    this.abilities.set('playingDead', new PlayingDead());
+
+    // 🆕 Phase 5 중급 능력들 등록
+    import('./WoundAnalysis').then(module => {
+      const ability = new module.WoundAnalysis();
+      this.abilities.set('woundAnalysis', ability);
     });
 
-    import('./SniperRifle').then(module => {
-      const sniperRifle = new module.SniperRifle();
-      this.abilities.set('sniperRifle', sniperRifle);
-    });
-
-    import('./Quantumization').then(module => {
-      const quantumization = new module.Quantumization();
-      this.abilities.set('quantumization', quantumization);
-    });
-
-    import('./SwiftCounter').then(module => {
-      const swiftCounter = new module.SwiftCounter();
-      this.abilities.set('swiftCounter', swiftCounter);
-    });
-
-    import('./Alzheimer').then(module => {
-      const alzheimer = new module.Alzheimer();
-      this.abilities.set('alzheimer', alzheimer);
-    });
-
-    import('./Judge').then(module => {
-      const judge = new module.Judge();
-      this.abilities.set('judge', judge);
+    import('./ShadowInDarkness').then(module => {
+      const ability = new module.ShadowInDarkness();
+      this.abilities.set('shadowInDarkness', ability);
     });
 
     import('./Synchronize').then(module => {
-      const synchronize = new module.Synchronize();
-      this.abilities.set('synchronize', synchronize);
+      const ability = new module.Synchronize();
+      this.abilities.set('synchronize', ability);
+    });
+
+    import('./EndOfDestruction').then(module => {
+      const ability = new module.EndOfDestruction();
+      this.abilities.set('endOfDestruction', ability);
+    });
+
+    import('./PainfulMemory').then(module => {
+      const ability = new module.PainfulMemory();
+      this.abilities.set('painfulMemory', ability);
+    });
+
+    import('./DiscordDissonance').then(module => {
+      const ability = new module.DiscordDissonance();
+      this.abilities.set('discordDissonance', ability);
+    });
+
+    import('./WeaponBreak').then(module => {
+      const ability = new module.WeaponBreak();
+      this.abilities.set('weaponBreak', ability);
+    });
+
+    import('./Confusion').then(module => {
+      const ability = new module.Confusion();
+      this.abilities.set('confusion', ability);
+    });
+
+    import('./PreemptivePrediction').then(module => {
+      const ability = new module.PreemptivePrediction();
+      this.abilities.set('preemptivePrediction', ability);
+    });
+
+    import('./WillLoss').then(module => {
+      const ability = new module.WillLoss();
+      this.abilities.set('willLoss', ability);
+    });
+
+    import('./Unseeable').then(module => {
+      const ability = new module.Unseeable();
+      this.abilities.set('unseeable', ability);
+    });
+
+    // 🆕 Phase 7 최고난이도 능력들 등록
+    import('./LiveToDie').then(module => {
+      const ability = new module.LiveToDie();
+      this.abilities.set('liveToDie', ability);
     });
 
     import('./GhostSummoning').then(module => {
-      const ghostSummoning = new module.GhostSummoning();
-      this.abilities.set('ghostSummoning', ghostSummoning);
+      const ability = new module.GhostSummoning();
+      this.abilities.set('ghostSummoning', ability);
+    });
+
+    import('./FallenCrown').then(module => {
+      const ability = new module.FallenCrown();
+      this.abilities.set('fallenCrown', ability);
+    });
+
+    import('./FateExchange').then(module => {
+      const ability = new module.FateExchange();
+      this.abilities.set('fateExchange', ability);
+    });
+
+    import('./RisingAshes').then(module => {
+      const ability = new module.RisingAshes();
+      this.abilities.set('risingAshes', ability);
+    });
+
+    import('./Judge').then(module => {
+      const ability = new module.Judge();
+      this.abilities.set('judge', ability);
     });
   }
 
@@ -128,8 +281,7 @@ export class AbilityManager {
     const ability = this.abilities.get(mappedAbilityId);
     if (ability) {
       (ability as BaseAbility).setOwner(playerId);
-      (ability as BaseAbility).setAbilityManager(this);
-      
+      (ability as BaseAbility).setAbilityManager(this as any);
       this.playerAbilities.set(playerId, ability as BaseAbility);
       console.log(`[ABILITY] Owner 설정 완료: Player ${playerId} -> ${mappedAbilityId}`);
     }
@@ -312,13 +464,15 @@ export class AbilityManager {
 
   // 시스템 이벤트 핸들러
   private async handleTurnStart(event: ModifiableEvent): Promise<void> {
-    this.currentTurn = event.data.turn;
+    const data = event.data as { turn: number };
+    this.currentTurn = data.turn;
     const abilities = Array.from(this.playerAbilities.values());
     await this.executeWithPriority(abilities, event);
   }
 
   private async handleTurnEnd(event: ModifiableEvent): Promise<void> {
-    const turnNumber = event.data.turn;
+    const data = event.data as { turn: number };
+    const turnNumber = data.turn;
     
     // 모든 능력의 턴 변수 정리
     for (const ability of this.playerAbilities.values()) {
@@ -343,7 +497,8 @@ export class AbilityManager {
   }
 
   private async handlePerfectGuard(event: ModifiableEvent): Promise<void> {
-    const { player, playerName, oldDefenseGauge, newDefenseGauge, startHp, currentHp } = event.data;
+    const data = event.data as { player: number; playerName: string; oldDefenseGauge: number; newDefenseGauge: number; startHp: number; currentHp: number };
+    const { player, playerName, oldDefenseGauge, newDefenseGauge, startHp, currentHp } = data;
     
     console.log(`[AbilityManager] 퍼펙트 가드 이벤트 처리 시작:`);
     console.log(`  - 플레이어 ID: ${player}`);
@@ -365,7 +520,8 @@ export class AbilityManager {
   }
 
   private async handleDeath(event: ModifiableEvent): Promise<void> {
-    const { player, killer } = event.data;
+    const data = event.data as { player: number; killer?: number };
+    const { player, killer } = data;
     const playerObj = this.findPlayer(player);
     const killerObj = killer ? this.findPlayer(killer) : undefined;
     
@@ -376,7 +532,8 @@ export class AbilityManager {
   }
 
   private async handleFocusAttack(event: ModifiableEvent): Promise<void> {
-    const { attacker, target } = event.data;
+    const data = event.data as { attacker: number; target: number };
+    const { attacker, target } = data;
     const attackerPlayer = this.findPlayer(attacker);
     const targetPlayer = this.findPlayer(target);
     
@@ -403,21 +560,21 @@ export class AbilityManager {
   }
 
   private async handleBeforeAttack(event: ModifiableEvent): Promise<void> {
-    const { attacker, target } = event.data;
+    const data = event.data as { attacker: number; target: number };
+    const { attacker, target } = data;
     const attackerPlayer = this.findPlayer(attacker);
     const targetPlayer = this.findPlayer(target);
-    
     if (attackerPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
-      }
+    }
   }
 
   private async handleAfterAttack(event: ModifiableEvent): Promise<void> {
-    const { attacker, target, damage, isCritical } = event.data;
+    const data = event.data as { attacker: number; target: number; damage: number; isCritical?: boolean };
+    const { attacker, target, damage, isCritical } = data;
     const attackerPlayer = this.findPlayer(attacker);
     const targetPlayer = this.findPlayer(target);
-    
     if (attackerPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
@@ -425,9 +582,9 @@ export class AbilityManager {
   }
 
   private async handleBeforeDefend(event: ModifiableEvent): Promise<void> {
-    const { defender } = event.data;
+    const data = event.data as { defender: number };
+    const { defender } = data;
     const defenderPlayer = this.findPlayer(defender);
-    
     if (defenderPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
@@ -435,9 +592,9 @@ export class AbilityManager {
   }
 
   private async handleAfterDefend(event: ModifiableEvent): Promise<void> {
-    const { defender, damageReduced } = event.data;
+    const data = event.data as { defender: number; damageReduced: number };
+    const { defender, damageReduced } = data;
     const defenderPlayer = this.findPlayer(defender);
-    
     if (defenderPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
@@ -445,9 +602,9 @@ export class AbilityManager {
   }
 
   private async handleBeforeEvade(event: ModifiableEvent): Promise<void> {
-    const { evader } = event.data;
+    const data = event.data as { evader: number };
+    const { evader } = data;
     const evaderPlayer = this.findPlayer(evader);
-    
     if (evaderPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
@@ -455,9 +612,9 @@ export class AbilityManager {
   }
 
   private async handleAfterEvade(event: ModifiableEvent): Promise<void> {
-    const { evader, success } = event.data;
+    const data = event.data as { evader: number; success: boolean };
+    const { evader, success } = data;
     const evaderPlayer = this.findPlayer(evader);
-    
     if (evaderPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
@@ -465,9 +622,9 @@ export class AbilityManager {
   }
 
   private async handleBeforePass(event: ModifiableEvent): Promise<void> {
-    const { player } = event.data;
+    const data = event.data as { player: number };
+    const { player } = data;
     const playerObj = this.findPlayer(player);
-    
     if (playerObj) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
@@ -475,9 +632,9 @@ export class AbilityManager {
   }
 
   private async handleAfterPass(event: ModifiableEvent): Promise<void> {
-    const { player } = event.data;
+    const data = event.data as { player: number };
+    const { player } = data;
     const playerObj = this.findPlayer(player);
-    
     if (playerObj) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);

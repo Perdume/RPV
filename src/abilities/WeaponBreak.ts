@@ -1,90 +1,91 @@
 import { BaseAbility } from './BaseAbility';
-import { AbilityContext, TypedModifiableEvent, TurnStartEvent, AttackEvent } from '../types/game.types';
+import { AbilityContext, Player, ModifiableEvent, AttackEvent } from '../types/game.types';
 
 export class WeaponBreak extends BaseAbility {
+  private defenseAttackCount: Map<number, number> = new Map(); // 플레이어별 방어 공격 횟수
+
   constructor() {
-    super('weaponBreak', '무장 파열', '자신을 포함한 모든 플레이어의 행동에 따라 각각 적용합니다. 공격을 행동한 플레이어: 다음 턴 가하는 피해가 2 감소합니다. 방어를 행동한 플레이어: 이번 방어 행동은 실패하고, 다음 턴 방어 행동이 봉인됩니다. 회피를 행동한 플레이어: 이번 회피 행동은 실패하고, 다음 턴 가하는 피해가 1 감소합니다.', 0, 2);
+    super('weaponBreak', '무장 파열', '방어 행동시 모든 플레이어에게 다양한 효과를 적용합니다.', 0, 2);
   }
 
   async execute(context: AbilityContext, parameters: Record<string, any> = {}): Promise<{ success: boolean; message: string; damage?: number; heal?: number; death?: boolean; target?: number }> {
     // 이번 턴 효과 적용
     this.setTurn('weapon_break_active', true, context.currentTurn);
-    this.setTurn('attack_damage_reduction', true, context.currentTurn);
-    this.setTurn('defend_failure', true, context.currentTurn);
-    this.setTurn('evade_failure', true, context.currentTurn);
 
     return {
       success: true,
-      message: `${this.name} 능력을 사용했습니다. 모든 플레이어의 무장이 파열됩니다.`,
-      damage: 0,
-      heal: 0,
-      death: false
+      message: `${context.player.name}이(가) 무장 파열을 발동합니다!`,
+      target: context.player.id
     };
   }
 
-  // 패시브 1: 능력을 사용하는 턴, 받는 피해가 1 감소합니다
-  async onBeforeDamage(event: any): Promise<void> {
-    if (this.getTurn('weapon_break_active', this.getCurrentTurn()) && event.data.target === this.ownerId) {
-      event.data.newDamage = Math.max(0, (event.data.newDamage || event.data.damage) - 1);
-      console.log(`[무장 파열] ${this.ownerId}이(가) 받는 피해가 1 감소합니다!`);
+  // 패시브 1: 능력을 사용하는 턴, 받는 피해가 1 감소
+  async onBeforeAttack(event: ModifiableEvent): Promise<void> {
+    const currentTurn = this.getSession('current_turn') as number || 0;
+    const data = event.data as AttackEvent;
+    
+    if (this.getTurn('weapon_break_active', currentTurn) && data.target === this.ownerId) {
+      data.newDamage = Math.max(0, (data.newDamage || data.damage) - 1);
+      event.modified = true;
+      console.log(`[무장 파열] ${this.ownerId} 받는 피해 1 감소`);
     }
   }
 
-  // 패시브 2: 방어를 행동한 플레이어를 누적 2번 공격할 때마다 사용 가능 횟수를 1회 얻습니다
-  async onAfterAttack(event: TypedModifiableEvent<AttackEvent>): Promise<void> {
-    if (event.data.attacker === this.ownerId) {
-      const target = event.data.targetPlayer;
+  // 패시브 2: 방어를 행동한 플레이어를 누적 2번 공격할 때마다 사용 가능 횟수를 1회 얻음
+  async onAfterAttack(event: ModifiableEvent): Promise<void> {
+    const data = event.data as AttackEvent;
+    if (data.attacker === this.ownerId) {
+      const target = data.targetPlayer;
       if (target && target.actionType === 'DEFEND') {
-        const defendAttackCount = this.getSession(`defend_attack_${target.id}`) as number || 0;
-        this.setSession(`defend_attack_${target.id}`, defendAttackCount + 1);
+        const currentCount = this.defenseAttackCount.get(target.id) || 0;
+        const newCount = currentCount + 1;
+        this.defenseAttackCount.set(target.id, newCount);
         
-        if ((defendAttackCount + 1) % 2 === 0) {
+        if (newCount % 2 === 0) {
           this.maxUses = Math.min(this.maxUses + 1, 2);
-          console.log(`[무장 파열] ${this.ownerId}이(가) ${target.id}를 2번 공격하여 능력 사용 횟수를 1회 얻습니다!`);
+          console.log(`[무장 파열] ${target.name} 방어 공격 ${newCount}회로 사용 횟수 1회 획득`);
         }
       }
     }
   }
 
-  // 공격을 행동한 플레이어: 다음 턴 가하는 피해가 2 감소합니다
-  async onTurnStart(event: TypedModifiableEvent<TurnStartEvent>): Promise<void> {
-    const turn = event.data.turn;
-    if (this.getTurn('attack_damage_reduction', turn - 1)) {
-      const players = event.data.players || [];
-      for (const player of players) {
-        if (player.actionType === 'ATTACK') {
-          this.setTurn(`damage_reduction_${player.id}`, 2, turn);
-          console.log(`[무장 파열] ${player.id}의 다음 턴 피해가 2 감소합니다!`);
-        }
+  // 턴 종료시 모든 플레이어 행동에 따른 효과 적용
+  async onTurnEnd(event: ModifiableEvent): Promise<void> {
+    const currentTurn = this.getSession('current_turn') as number || 0;
+    if (!this.getTurn('weapon_break_active', currentTurn)) return;
+
+    const players = this.getSession('players') as Player[] || [];
+    
+    for (const player of players) {
+      switch (player.actionType) {
+        case 'ATTACK':
+          // 다음 턴 가하는 피해가 2 감소
+          this.setSession(`damage_reduction_${player.id}`, {
+            turn: currentTurn + 1,
+            amount: 2
+          });
+          console.log(`[무장 파열] ${player.name} 공격으로 다음 턴 피해 2 감소`);
+          break;
+          
+        case 'DEFEND':
+          // 이번 방어 행동은 실패하고, 다음 턴 방어 행동이 봉인
+          this.setSession(`defend_fail_${player.id}`, currentTurn);
+          this.setSession(`defend_seal_${player.id}`, {
+            turn: currentTurn + 1
+          });
+          console.log(`[무장 파열] ${player.name} 방어 실패 및 다음 턴 방어 봉인`);
+          break;
+          
+        case 'EVADE':
+          // 이번 회피 행동은 실패하고, 다음 턴 가하는 피해가 1 감소
+          this.setSession(`evade_fail_${player.id}`, currentTurn);
+          this.setSession(`damage_reduction_${player.id}`, {
+            turn: currentTurn + 1,
+            amount: 1
+          });
+          console.log(`[무장 파열] ${player.name} 회피 실패 및 다음 턴 피해 1 감소`);
+          break;
       }
     }
-  }
-
-  // 방어를 행동한 플레이어: 이번 방어 행동은 실패하고, 다음 턴 방어 행동이 봉인됩니다
-  async onBeforeDefend(event: any): Promise<void> {
-    if (this.getTurn('defend_failure', this.getCurrentTurn())) {
-      event.cancelled = true;
-      const player = event.data.players?.find((p: any) => p.id === event.data.player);
-      if (player) {
-        this.setTurn(`defend_seal_${player.id}`, true, this.getCurrentTurn() + 1);
-        console.log(`[무장 파열] ${player.id}의 방어가 실패하고 다음 턴 방어가 봉인됩니다!`);
-      }
-    }
-  }
-
-  // 회피를 행동한 플레이어: 이번 회피 행동은 실패하고, 다음 턴 가하는 피해가 1 감소합니다
-  async onBeforeEvade(event: any): Promise<void> {
-    if (this.getTurn('evade_failure', this.getCurrentTurn())) {
-      event.cancelled = true;
-      const player = event.data.players?.find((p: any) => p.id === event.data.player);
-      if (player) {
-        this.setTurn(`damage_reduction_${player.id}`, 1, this.getCurrentTurn() + 1);
-        console.log(`[무장 파열] ${player.id}의 회피가 실패하고 다음 턴 피해가 1 감소합니다!`);
-      }
-    }
-  }
-
-  private getCurrentTurn(): number {
-    return (this.getSession('current_turn') as number) || 0;
   }
 } 
