@@ -121,12 +121,6 @@ export interface TurnResult {
   isDeathZone: boolean;
 }
 
-export interface DefendEvent {
-  player: PlayerId;
-  defenseGauge: number;
-  damageReduction: number;
-}
-
 export interface ModifiableEvent {
   type: GameEventType;
   timestamp: number;
@@ -292,4 +286,91 @@ export const schemas = {
     validate: (value: any): value is any[] => Array.isArray(value),
     defaultValue: [] as any[]
   }
-} as const; 
+} as const;
+
+// 🆕 구체적인 이벤트 데이터 타입들
+export interface TurnStartEvent {
+  turn: number;
+  players: Player[];
+  statusEffectManager?: any;
+  eventSystem?: any;
+}
+
+export interface TurnEndEvent {
+  turn: number;
+  players: Player[];
+  statusEffectManager?: any;
+}
+
+export interface AttackEvent {
+  attacker: number;
+  target: number;
+  damage: number;
+  attackerPlayer?: Player;
+  targetPlayer?: Player;
+  ignoreDefense?: boolean;
+  ignoreEvade?: boolean;
+  ignoreDamageReduction?: boolean;
+  newTarget?: number;
+  newDamage?: number;
+  attackSuccess?: boolean;
+}
+
+export interface DefendEvent {
+  player: number;
+  defenseGauge: number;
+  damageReduction: number;
+}
+
+export interface EvadeEvent {
+  player: number;
+  attacker?: number;
+  success: boolean;
+  chance: number;
+  noEvadeCountIncrease?: boolean;
+}
+
+export interface DeathEvent {
+  player: number;
+  killer?: number;
+  lastDamage?: number;
+  playerName?: string;
+  oldDefenseGauge?: number;
+  newDefenseGauge?: number;
+  startHp?: number;
+  currentHp?: number;
+}
+
+export interface StatusEffectEvent {
+  targetId: number;
+  effectId: string;
+  duration: number;
+  stacks: number;
+  effect?: StatusEffect;
+}
+
+export interface AbilityChainEvent {
+  chainId: string;
+  triggerAbility: string;
+}
+
+// 🆕 이벤트 데이터 타입 매핑
+export type EventDataMap = {
+  [GameEventType.TURN_START]: TurnStartEvent;
+  [GameEventType.TURN_END]: TurnEndEvent;
+  [GameEventType.BEFORE_ATTACK]: AttackEvent;
+  [GameEventType.AFTER_ATTACK]: AttackEvent;
+  [GameEventType.BEFORE_DEFEND]: DefendEvent;
+  [GameEventType.AFTER_DEFEND]: DefendEvent;
+  [GameEventType.BEFORE_EVADE]: EvadeEvent;
+  [GameEventType.AFTER_EVADE]: EvadeEvent;
+  [GameEventType.DEATH]: DeathEvent;
+  [GameEventType.STATUS_EFFECT_APPLIED]: StatusEffectEvent;
+  [GameEventType.STATUS_EFFECT_REMOVED]: StatusEffectEvent;
+  [GameEventType.ABILITY_CHAIN_TRIGGERED]: AbilityChainEvent;
+}
+
+// 🆕 타입 안전한 ModifiableEvent
+export interface TypedModifiableEvent<T = any> extends ModifiableEvent {
+  data: T;
+} 

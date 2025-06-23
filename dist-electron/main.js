@@ -5,6 +5,11 @@ const path = require('path');
 // 개발 모드 확인
 const isDev = process.env.NODE_ENV === 'development';
 
+// 프로젝트 루트 함수 추가
+const getProjectRoot = () => {
+  return path.resolve(__dirname, '..');
+};
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -45,6 +50,7 @@ app.whenReady().then(() => {
   console.log('\n=== 🗂️ Electron 경로 정보 ===');
   console.log('현재 작업 디렉토리:', process.cwd());
   console.log('앱 경로 (getAppPath):', app.getAppPath());
+  console.log('프로젝트 루트:', getProjectRoot());
   console.log('사용자 데이터 경로:', app.getPath('userData'));
   console.log('실행 파일 경로:', process.execPath);
   console.log('__dirname:', __dirname);
@@ -69,7 +75,7 @@ app.on('activate', () => {
 // === 기본 파일 시스템 핸들러 ===
 ipcMain.handle('fs:readFile', async (event, filePath) => {
   try {
-    const absolutePath = path.resolve(app.getAppPath(), filePath);
+    const absolutePath = path.resolve(getProjectRoot(), filePath);
     console.log(`[IPC] 파일 읽기: ${filePath} → ${absolutePath}`);
     
     const exists = require('fs').existsSync(absolutePath);
@@ -88,7 +94,7 @@ ipcMain.handle('fs:readFile', async (event, filePath) => {
 
 ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
   try {
-    const absolutePath = path.resolve(app.getAppPath(), filePath);
+    const absolutePath = path.resolve(getProjectRoot(), filePath);
     const dir = path.dirname(absolutePath);
     
     console.log(`[IPC] 파일 쓰기: ${filePath} → ${absolutePath}`);
@@ -104,7 +110,7 @@ ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
 
 ipcMain.handle('fs:ensureDirectory', async (event, dirPath) => {
   try {
-    const absolutePath = path.resolve(app.getAppPath(), dirPath);
+    const absolutePath = path.resolve(getProjectRoot(), dirPath);
     console.log(`[IPC] 디렉토리 생성: ${dirPath} → ${absolutePath}`);
     
     await fs.mkdir(absolutePath, { recursive: true });
@@ -120,6 +126,7 @@ ipcMain.handle('debug:getAllPaths', async () => {
   return {
     cwd: process.cwd(),
     appPath: app.getAppPath(),
+    projectRoot: getProjectRoot(),
     userData: app.getPath('userData'),
     execPath: process.execPath,
     __dirname: __dirname,
@@ -130,7 +137,7 @@ ipcMain.handle('debug:getAllPaths', async () => {
 
 ipcMain.handle('debug:checkFile', async (event, filePath) => {
   try {
-    const absolutePath = path.resolve(app.getAppPath(), filePath);
+    const absolutePath = path.resolve(getProjectRoot(), filePath);
     const exists = require('fs').existsSync(absolutePath);
     
     if (exists) {
@@ -153,7 +160,7 @@ ipcMain.handle('debug:checkFile', async (event, filePath) => {
     console.error(`[DEBUG] 파일 확인 실패: ${filePath}`, error);
     return {
       exists: false,
-      absolutePath: path.resolve(app.getAppPath(), filePath),
+      absolutePath: path.resolve(getProjectRoot(), filePath),
       error: error.message
     };
   }
@@ -161,7 +168,7 @@ ipcMain.handle('debug:checkFile', async (event, filePath) => {
 
 ipcMain.handle('debug:listFiles', async (event, dirPath) => {
   try {
-    const absolutePath = path.resolve(app.getAppPath(), dirPath);
+    const absolutePath = path.resolve(getProjectRoot(), dirPath);
     const files = await fs.readdir(absolutePath);
     console.log(`[DEBUG] Files in ${dirPath}:`, files);
     return files;

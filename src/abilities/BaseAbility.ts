@@ -62,11 +62,13 @@ export abstract class BaseAbility implements Ability {
     totalExecutionTime: number;
     averageExecutionTime: number;
     lastExecutionTimestamp: number;
+    errorCount: number;
   } = {
     totalExecutions: 0,
     totalExecutionTime: 0,
     averageExecutionTime: 0,
-    lastExecutionTimestamp: 0
+    lastExecutionTimestamp: 0,
+    errorCount: 0
   };
 
   constructor(id: string, name: string, description: string, maxCooldown: number = 0, maxUses: number) {
@@ -222,11 +224,21 @@ export abstract class BaseAbility implements Ability {
   // 상태이상 적용
   protected applyStatusEffect(targetId: number, effectId: string, duration: number = 1, stacks: number = 1): boolean {
     try {
-      const success = StatusEffectManager.getInstance().applyStatusEffect(targetId, effectId, duration, stacks);
-      if (success) {
-        this.statusEffects.set(effectId, { id: effectId, duration, stacks });
-      }
-      return success;
+      const statusManager = StatusEffectManager.getInstance();
+      const effect: StatusEffect = {
+        id: effectId,
+        name: effectId,
+        description: `${effectId} 상태이상`,
+        duration,
+        stackable: true,
+        type: 'debuff',
+        stacks,
+        source: this.ownerId || undefined
+      };
+      
+      statusManager.applyStatusEffect(targetId, effect);
+      this.statusEffects.set(effectId, effect);
+      return true;
     } catch (error) {
       console.error(`[${this.id}] 상태이상 적용 실패:`, error);
       return false;
@@ -236,11 +248,10 @@ export abstract class BaseAbility implements Ability {
   // 상태이상 제거
   protected removeStatusEffect(targetId: number, effectId: string): boolean {
     try {
-      const success = StatusEffectManager.getInstance().removeStatusEffect(targetId, effectId);
-      if (success) {
-        this.statusEffects.delete(effectId);
-      }
-      return success;
+      const statusManager = StatusEffectManager.getInstance();
+      statusManager.removeStatusEffect(targetId, effectId);
+      this.statusEffects.delete(effectId);
+      return true;
     } catch (error) {
       console.error(`[${this.id}] 상태이상 제거 실패:`, error);
       return false;
@@ -249,12 +260,15 @@ export abstract class BaseAbility implements Ability {
   
   // 상태이상 체크
   protected hasStatusEffect(targetId: number, effectId: string): boolean {
-    return StatusEffectManager.getInstance().hasStatusEffect(targetId, effectId);
+    const statusManager = StatusEffectManager.getInstance();
+    return statusManager.hasStatusEffect(targetId, effectId);
   }
   
   // 상태이상 정보 가져오기
   protected getStatusEffect(targetId: number, effectId: string): StatusEffect | null {
-    return StatusEffectManager.getInstance().getStatusEffect(targetId, effectId);
+    const statusManager = StatusEffectManager.getInstance();
+    const effect = statusManager.getStatusEffect(targetId, effectId);
+    return effect || null;
   }
 
   // === 🆕 능력 체인 시스템 ===
@@ -269,7 +283,7 @@ export abstract class BaseAbility implements Ability {
     });
   }
   
-  // 능력 체인 실행
+  // 🆕 능력 체인 실행
   protected async executeAbilityChain(chainId: string, context: AbilityContext): Promise<void> {
     const chain = this.abilityChains.get(chainId);
     if (!chain) return;
@@ -279,8 +293,10 @@ export abstract class BaseAbility implements Ability {
     // 다음 능력 실행
     if (chain.nextAbility && this.abilityManager) {
       const nextAbility = this.abilityManager.getAbility(chain.nextAbility);
-      if (nextAbility) {
-        await nextAbility.execute(context);
+      if (nextAbility && 'onBeforeAttack' in nextAbility) {
+        // BaseAbility의 메서드 호출
+        const baseAbility = nextAbility as BaseAbility;
+        await baseAbility.onBeforeAttack(context.event);
       }
     }
   }
@@ -407,7 +423,7 @@ export abstract class BaseAbility implements Ability {
     
     await DataManager.saveAbilityData(this.ownerId, this.id, data);
   }
-
+  
   public debugVariables(): void {
     console.log(`[${this.id}] === 변수 디버그 ===`);
     console.log(`[${this.id}] 총 변수 수: ${this.variables.size}`);
@@ -458,7 +474,9 @@ export abstract class BaseAbility implements Ability {
       currentTurn: this.abilityManager.getCurrentTurn(),
       logs: this.abilityManager.getLogs(),
       ability: this,
-      statusEffectManager: StatusEffectManager.getInstance(),
+      statusEffectManager: this.abilityManager ? 
+        StatusEffectManager.getInstanceWithEventSystem(this.abilityManager.getEventSystem()) : 
+        StatusEffectManager.getInstance(),
       performanceMetrics: this.performanceMetrics,
       errorCount: this.errorCount
     };
@@ -515,11 +533,46 @@ export abstract class BaseAbility implements Ability {
     return Math.abs(player1.id - player2.id);
   }
   
-  // 능력 사용 가능 여부 체크
+  // 🆕 능력 사용 가능 여부 체크 (하위 클래스에서 오버라이드 가능)
   protected canUseAbility(context: AbilityContext): boolean {
-    if (!this.isActive) return false;
-    if (this.isOnCooldown()) return false;
-    if (this.errorCount > 10) return false; // 에러가 너무 많으면 비활성화
-    return true;
+    return this.isActive && !this.isOnCooldown();
+  }
+
+  // 🆕 Phase 2: 능력 실행 메서드
+  public async execute(
+    context: AbilityContext, 
+    parameters: Record<string, any> = {}
+  ): Promise<{ success: boolean; message: string; damage?: number; heal?: number; death?: boolean; target?: number }> {
+    try {
+      // 기본 실행 가능 여부 체크
+      if (!this.canUseAbility(context)) {
+        return {
+          success: false,
+          message: '능력을 사용할 수 없습니다.',
+          damage: 0,
+          heal: 0,
+          death: false
+        };
+      }
+
+      // 하위 클래스에서 반드시 구현해야 하는 부분
+      // 기본 구현은 성공만 반환
+      return {
+        success: true,
+        message: `${this.name} 능력을 사용했습니다.`,
+        damage: 0,
+        heal: 0,
+        death: false
+      };
+    } catch (error) {
+      console.error(`[${this.id}] 능력 실행 오류: ${error}`);
+      return {
+        success: false,
+        message: '능력 실행 중 오류가 발생했습니다.',
+        damage: 0,
+        heal: 0,
+        death: false
+      };
+    }
   }
 }

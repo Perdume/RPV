@@ -35,23 +35,17 @@ window.testEvents = async function() {
     players: [
       {
         id: 1,
-        name: '디버거',
-        hp: 5,
-        maxHp: 5,
+        name: '플레이어 1',
+        hp: 10,
+        maxHp: 10,
         defenseGauge: 3,
         maxDefenseGauge: 3,
-        evadeCount: 0,
-        abilityId: 'debug_logger',
+        evadeCount: 1,
+        abilityId: 'multipleStrike',
         status: PlayerStatus.ALIVE,
-        ability: '디버그 로거',
-        abilityUses: 1,
-        maxAbilityUses: 1,
-        statusEffects: [],
-        isPerfectGuard: false,
-        defense: 3,
-        maxDefense: 3,
-        evasion: 0,
-        attack: 1,
+        ability: '다중 타격',
+        abilityUses: 3,
+        maxAbilityUses: 3,
         pendingDefenseHeal: 0,
         hasDefended: false,
         wasAttacked: false,
@@ -59,29 +53,33 @@ window.testEvents = async function() {
         isDefenseSealed: false,
         damageReduction: 0,
         isGhost: false,
+        defense: 3,
+        maxDefense: 3,
+        evasion: 1,
+        attack: 1,
+        statusEffects: [],
+        isPerfectGuard: false,
+        targetId: undefined,
+        actionType: undefined,
         currentTurn: 1,
         noDamageTurns: 0,
-        inactiveTurns: 0
+        inactiveTurns: 0,
+        isInvincible: false,
+        customFlags: new Map()
       },
       {
         id: 2,
-        name: '플레이어1',
-        hp: 5,
-        maxHp: 5,
+        name: '플레이어 2',
+        hp: 10,
+        maxHp: 10,
         defenseGauge: 3,
         maxDefenseGauge: 3,
-        evadeCount: 0,
-        abilityId: 'none',
+        evadeCount: 1,
+        abilityId: 'sniperRifle',
         status: PlayerStatus.ALIVE,
-        ability: '없음',
-        abilityUses: 0,
-        maxAbilityUses: 0,
-        statusEffects: [],
-        isPerfectGuard: false,
-        defense: 3,
-        maxDefense: 3,
-        evasion: 0,
-        attack: 1,
+        ability: 'HS.50 대물 저격소총',
+        abilityUses: 3,
+        maxAbilityUses: 3,
         pendingDefenseHeal: 0,
         hasDefended: false,
         wasAttacked: false,
@@ -89,9 +87,19 @@ window.testEvents = async function() {
         isDefenseSealed: false,
         damageReduction: 0,
         isGhost: false,
+        defense: 3,
+        maxDefense: 3,
+        evasion: 1,
+        attack: 1,
+        statusEffects: [],
+        isPerfectGuard: false,
+        targetId: undefined,
+        actionType: undefined,
         currentTurn: 1,
         noDamageTurns: 0,
-        inactiveTurns: 0
+        inactiveTurns: 0,
+        isInvincible: false,
+        customFlags: new Map()
       }
     ],
     currentTurn: 1,
@@ -100,7 +108,11 @@ window.testEvents = async function() {
     turn: 1,
     survivors: [],
     deathZone: false,
-    currentSession: 'test-session'
+    currentSession: 'test-session',
+    statusEffects: new Map(),
+    customGameFlags: new Map(),
+    delayedEffects: [],
+    gameHistory: []
   };
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);
@@ -168,7 +180,11 @@ window.testRollback = async function() {
         isGhost: false,
         currentTurn: 1,
         noDamageTurns: 0,
-        inactiveTurns: 0
+        inactiveTurns: 0,
+        targetId: undefined,
+        actionType: undefined,
+        isInvincible: false,
+        customFlags: new Map()
       },
       {
         id: 2,
@@ -198,7 +214,11 @@ window.testRollback = async function() {
         isGhost: false,
         currentTurn: 1,
         noDamageTurns: 0,
-        inactiveTurns: 0
+        inactiveTurns: 0,
+        targetId: undefined,
+        actionType: undefined,
+        isInvincible: false,
+        customFlags: new Map()
       }
     ],
     currentTurn: 1,
@@ -207,7 +227,11 @@ window.testRollback = async function() {
     turn: 1,
     survivors: [],
     deathZone: false,
-    currentSession: 'test-session'
+    currentSession: 'test-session',
+    statusEffects: new Map(),
+    customGameFlags: new Map(),
+    delayedEffects: [],
+    gameHistory: []
   };
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);
@@ -287,7 +311,11 @@ window.testRedo = async function() {
         isGhost: false,
         currentTurn: 1,
         noDamageTurns: 0,
-        inactiveTurns: 0
+        inactiveTurns: 0,
+        targetId: undefined,
+        actionType: undefined,
+        isInvincible: false,
+        customFlags: new Map()
       },
       {
         id: 2,
@@ -317,7 +345,11 @@ window.testRedo = async function() {
         isGhost: false,
         currentTurn: 1,
         noDamageTurns: 0,
-        inactiveTurns: 0
+        inactiveTurns: 0,
+        targetId: undefined,
+        actionType: undefined,
+        isInvincible: false,
+        customFlags: new Map()
       }
     ],
     currentTurn: 1,
@@ -326,7 +358,11 @@ window.testRedo = async function() {
     turn: 1,
     survivors: [],
     deathZone: false,
-    currentSession: 'test-session'
+    currentSession: 'test-session',
+    statusEffects: new Map(),
+    customGameFlags: new Map(),
+    delayedEffects: [],
+    gameHistory: []
   };
 
   const turnProcessor = new TurnProcessor(gameState, eventSystem);

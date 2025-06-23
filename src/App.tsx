@@ -10,10 +10,10 @@ import { TurnProcessor } from './utils/turnProcessor';
 import { TurnControl } from './components/TurnControl';
 import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
+import { StatusEffectManager } from './utils/StatusEffectManager';
 import { useEventTesting } from './utils/manualEventTest';
 import { initFileSystem } from './utils/fsInit';
 import { BackupUtils } from './utils/backupUtils';
-import { Debug } from './abilities/Debug';
 import { ElectronPathDisplay } from './components/ElectronPathDisplay';
 
 interface GameData {
@@ -89,7 +89,14 @@ const App: React.FC = () => {
     console.log('[APP] EventSystem 생성 완료');
   }
 
-  // AbilityManager 초기화 (EventSystem이 준비된 후)
+  // StatusEffectManager 초기화 (EventSystem이 준비된 후)
+  if (eventSystemRef.current) {
+    console.log('[APP] StatusEffectManager 초기화 중...');
+    StatusEffectManager.initializeWithEventSystem(eventSystemRef.current);
+    console.log('[APP] StatusEffectManager 초기화 완료');
+  }
+
+  // AbilityManager 초기화 (EventSystem과 StatusEffectManager가 준비된 후)
   if (!abilityManagerRef.current && eventSystemRef.current) {
     console.log('[APP] AbilityManager 생성 중...');
     abilityManagerRef.current = new AbilityManager(eventSystemRef.current);
@@ -125,7 +132,7 @@ const App: React.FC = () => {
           evadeCount: p.evadeCount,
           abilityId: p.ability.toLowerCase().replace(/\s+/g, ''),
           status: p.status.toUpperCase() as PlayerStatus,
-          statusEffects: p.statusEffects,
+          statusEffects: [],
           isPerfectGuard: false,
           defense: 0,
           maxDefense: 3,
@@ -145,7 +152,9 @@ const App: React.FC = () => {
           actionType: undefined,
           noDamageTurns: 0,
           inactiveTurns: 0,
-          currentTurn: data.turn
+          currentTurn: data.turn,
+          isInvincible: false,
+          customFlags: new Map<string, any>()
         }));
 
         // 능력 등록
@@ -195,7 +204,11 @@ const App: React.FC = () => {
       turn: currentTurn,
       survivors: players.filter(p => p.status !== PlayerStatus.DEAD),
       deathZone: isDeathZone,
-      currentSession: 'game-session'
+      currentSession: 'game-session',
+      statusEffects: new Map(),
+      customGameFlags: new Map(),
+      delayedEffects: [],
+      gameHistory: []
     };
 
     // TurnProcessor가 없으면 생성, 있으면 재사용
@@ -309,27 +322,6 @@ const App: React.FC = () => {
           }}
         >
           📁 백업 상세
-        </button>
-        <button 
-          onClick={async () => {
-            if (abilityManager) {
-              const debug = abilityManager.getPlayerAbility(1); // 디버거 플레이어
-              if (debug instanceof Debug) {
-                await debug.testVariables();
-              }
-            }
-          }}
-          style={{
-            padding: '8px 16px',
-            margin: '4px',
-            backgroundColor: '#9C27B0',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          🧪 변수 테스트
         </button>
       </div>
     </>

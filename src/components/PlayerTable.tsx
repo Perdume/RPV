@@ -1,7 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
 import { theme } from '../styles/theme';
-import { Player, PlayerStatus } from '../types/game.types';
+import { Player, PlayerStatus, StatusEffect } from '../types/game.types';
 
 interface PlayerTableProps {
   players: Player[];
@@ -94,7 +94,7 @@ const AbilityBadge = styled.span`
   border: 1px solid ${theme.colors.accent.survivor};
 `;
 
-const StatusEffect = styled.span<{ type: 'positive' | 'negative' | 'neutral' }>`
+const StatusEffectBadge = styled.span<{ type: string }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -105,23 +105,26 @@ const StatusEffect = styled.span<{ type: 'positive' | 'negative' | 'neutral' }>`
   margin-right: 6px;
   background: ${props => {
     switch (props.type) {
-      case 'positive': return `${theme.colors.accent.survivor}20`;
-      case 'negative': return `${theme.colors.accent.danger}20`;
+      case 'buff': return `${theme.colors.accent.survivor}20`;
+      case 'debuff': return `${theme.colors.accent.danger}20`;
       case 'neutral': return `${theme.colors.accent.warning}20`;
+      default: return `${theme.colors.accent.warning}20`;
     }
   }};
   color: ${props => {
     switch (props.type) {
-      case 'positive': return theme.colors.accent.survivor;
-      case 'negative': return theme.colors.accent.danger;
+      case 'buff': return theme.colors.accent.survivor;
+      case 'debuff': return theme.colors.accent.danger;
       case 'neutral': return theme.colors.accent.warning;
+      default: return theme.colors.accent.warning;
     }
   }};
   border: 1px solid ${props => {
     switch (props.type) {
-      case 'positive': return theme.colors.accent.survivor;
-      case 'negative': return theme.colors.accent.danger;
+      case 'buff': return theme.colors.accent.survivor;
+      case 'debuff': return theme.colors.accent.danger;
       case 'neutral': return theme.colors.accent.warning;
+      default: return theme.colors.accent.warning;
     }
   }};
 `;
@@ -179,14 +182,12 @@ const AbilityText = styled.span<{ $isZero: boolean }>`
   color: ${props => props.$isZero ? theme.colors.accent.danger : theme.colors.text.secondary};
 `;
 
-const getStatusEffectType = (effect: string): 'positive' | 'negative' | 'neutral' => {
-  if (effect.startsWith('+')) return 'positive';
-  if (effect.startsWith('-')) return 'negative';
-  return 'neutral';
+const getStatusEffectType = (effect: StatusEffect): string => {
+  return effect.type || 'neutral';
 };
 
-const getStatusEffectName = (effect: string): string => {
-  return effect.substring(1); // Remove the +/- prefix
+const getStatusEffectName = (effect: StatusEffect): string => {
+  return effect.name || effect.id;
 };
 
 export const PlayerTable: React.FC<PlayerTableProps> = ({ players }) => {
@@ -225,9 +226,9 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({ players }) => {
             </Td>
             <Td>
               {player.statusEffects.map((effect, index) => (
-                <StatusEffect key={index} type={getStatusEffectType(effect)}>
+                <StatusEffectBadge key={index} type={getStatusEffectType(effect)}>
                   {getStatusEffectName(effect)}
-                </StatusEffect>
+                </StatusEffectBadge>
               ))}
             </Td>
           </Tr>

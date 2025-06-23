@@ -2,19 +2,47 @@ import { StatusEffect, Player, GameEventType, ModifiableEvent } from '../types/g
 import { EventSystem } from './eventSystem';
 
 export class StatusEffectManager {
-  private static instance: StatusEffectManager;
+  private static instance: StatusEffectManager | null = null;
   private effects: Map<number, StatusEffect[]> = new Map();
-  private eventSystem: EventSystem;
+  private eventSystem: any; // EventSystem 타입은 나중에 import
 
-  private constructor(eventSystem: EventSystem) {
+  private constructor() {
+    // 기본 상태이상 효과들 등록
+    this.registerDefaultEffects();
+  }
+
+  public static getInstance(): StatusEffectManager {
+    if (!StatusEffectManager.instance) {
+      StatusEffectManager.instance = new StatusEffectManager();
+    }
+    return StatusEffectManager.instance;
+  }
+
+  // 🆕 EventSystem과 함께 초기화하는 메서드
+  public static initializeWithEventSystem(eventSystem: EventSystem): StatusEffectManager {
+    const instance = StatusEffectManager.getInstance();
+    instance.setEventSystem(eventSystem);
+    return instance;
+  }
+
+  // 🆕 EventSystem이 설정된 인스턴스 가져오기
+  public static getInstanceWithEventSystem(eventSystem: EventSystem): StatusEffectManager {
+    const instance = StatusEffectManager.getInstance();
+    if (!instance.eventSystem) {
+      instance.setEventSystem(eventSystem);
+    }
+    return instance;
+  }
+
+  // 🆕 EventSystem 설정 메서드
+  public setEventSystem(eventSystem: any): void {
     this.eventSystem = eventSystem;
   }
 
-  public static getInstance(eventSystem: EventSystem): StatusEffectManager {
-    if (!StatusEffectManager.instance) {
-      StatusEffectManager.instance = new StatusEffectManager(eventSystem);
-    }
-    return StatusEffectManager.instance;
+  // 🆕 기본 상태이상 효과 등록
+  private registerDefaultEffects(): void {
+    // 기본 효과들은 이미 applyStatusEffect에서 처리되므로
+    // 여기서는 추가 설정이 필요한 경우에만 구현
   }
 
   // 상태이상 적용
@@ -71,27 +99,75 @@ export class StatusEffectManager {
     return this.effects.get(playerId) || [];
   }
 
-  // 턴 종료시 duration 감소
+  // 🆕 Phase 3: 상태이상 처리 로직 추가
   public processTurnEnd(): void {
     for (const [playerId, effects] of this.effects.entries()) {
-      const remainingEffects: StatusEffect[] = [];
+      const updatedEffects: StatusEffect[] = [];
       
       for (const effect of effects) {
         if (effect.duration === -1) {
-          // 영구 상태이상은 유지
-          remainingEffects.push(effect);
-        } else if (effect.duration > 1) {
-          // duration 감소
-          effect.duration--;
-          remainingEffects.push(effect);
+          // 영구 상태이상은 그대로 유지
+          updatedEffects.push(effect);
+          continue;
+        }
+        
+        // 지속시간 감소
+        effect.duration--;
+        
+        if (effect.duration > 0) {
+          updatedEffects.push(effect);
         } else {
-          // duration이 0이 되면 제거
-          this.emitStatusEffectRemoved(playerId, effect);
+          // 지속시간이 끝난 상태이상 제거
+          this.removeStatusEffect(playerId, effect.id);
+          
+          // 제거 이벤트 발생
+          if (this.eventSystem) {
+            const event: ModifiableEvent = {
+              type: GameEventType.STATUS_EFFECT_REMOVED,
+              timestamp: Date.now(),
+              data: {
+                playerId,
+                effectId: effect.id,
+                effect
+              },
+              cancelled: false,
+              modified: false
+            };
+            this.eventSystem.emit(event);
+          }
         }
       }
       
-      this.effects.set(playerId, remainingEffects);
+      this.effects.set(playerId, updatedEffects);
     }
+  }
+
+  // 🆕 특수 상태이상 처리
+  public processSpecialEffects(): void {
+    for (const [playerId, effects] of this.effects.entries()) {
+      for (const effect of effects) {
+        // 균열 처리
+        if (effect.id === 'crack' && (effect.stacks || 0) >= 3) {
+          // 피해 1 적용
+          const player = this.getPlayer(playerId);
+          if (player) {
+            player.hp = Math.max(0, player.hp - 1);
+          }
+          
+          // 균열 제거
+          this.removeStatusEffect(playerId, 'crack');
+        }
+        
+        // 기타 특수 효과들...
+      }
+    }
+  }
+
+  // 🆕 플레이어 정보 가져오기
+  private getPlayer(playerId: number): Player | null {
+    // GameState에서 플레이어 정보를 가져와야 함
+    // 실제 구현에서는 GameState 참조가 필요
+    return null;
   }
 
   // 상태이상 효과 적용

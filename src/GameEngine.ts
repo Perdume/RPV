@@ -3,7 +3,6 @@ import { Player, PlayerStatus, ModifiableEvent, GameEventType } from './types/ga
 import { GameState } from './GameState';
 import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
-import { Debug } from './abilities/Debug';
 
 // Helper function to convert GamePlayerStatus to PlayerStatus
 function convertPlayerStatus(status: GamePlayerStatus): PlayerStatus {
@@ -26,7 +25,6 @@ export class GameEngine {
   private eventSystem: EventSystem;
   private abilityManager: AbilityManager;
   private attackCounts: Map<PlayerId, Map<PlayerId, number>>;
-  private debug: Debug;
   private debugLogs: string[];
 
   constructor() {
@@ -34,7 +32,6 @@ export class GameEngine {
     this.eventSystem = new EventSystem();
     this.abilityManager = new AbilityManager(this.eventSystem);
     this.attackCounts = new Map();
-    this.debug = new Debug();
     this.debugLogs = [];
 
     this.addDebugLog('[초기화] GameEngine이 생성되었습니다.');
@@ -42,29 +39,6 @@ export class GameEngine {
 
   private addDebugLog(message: string): void {
     this.debugLogs.push(message);
-    const firstPlayer = Array.from(this.gameState.players.values())[0];
-    if (!firstPlayer) return;
-    
-    // Convert GamePlayer to Player type
-    const player: Player = {
-      ...firstPlayer,
-      status: convertPlayerStatus(firstPlayer.status),
-      isPerfectGuard: false,
-      maxAbilityUses: 0,
-      hasDefended: false,
-      wasAttacked: false,
-      isAbilitySealed: false,
-      isDefenseSealed: false,
-      damageReduction: 0,
-      isGhost: false,
-      currentTurn: this.gameState.currentTurn,
-      noDamageTurns: 0,
-      inactiveTurns: 0,
-      actionType: firstPlayer.action as any,
-      targetId: firstPlayer.target
-    };
-    
-    this.debug.logEvent('Debug', { message });
   }
 
   loadGameState(data: GameStateData): void {

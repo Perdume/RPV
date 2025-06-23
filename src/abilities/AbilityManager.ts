@@ -1,7 +1,6 @@
 import { EventSystem } from '../utils/eventSystem';
 import { GameEventType, ModifiableEvent, Ability, Player, AbilityContext } from '../types/game.types';
 import { BaseAbility } from './BaseAbility';
-import { Debug } from './Debug';
 import { StatusEffectManager } from '../utils/StatusEffectManager';
 
 export class AbilityManager {
@@ -42,9 +41,46 @@ export class AbilityManager {
   }
 
   private registerDefaultAbilities(): void {
-    // Debug 능력 등록 (ID 매핑 수정)
-    const debug = new Debug();
-    this.abilities.set('디버그로거', debug); // data.json의 "ability" 값과 매칭
+    // 🆕 Phase 4: ABILITY.md 능력들 등록 (실제 존재하는 파일들만)
+    import('./MultipleStrike').then(module => {
+      const multipleStrike = new module.MultipleStrike();
+      this.abilities.set('multipleStrike', multipleStrike);
+    });
+
+    import('./SniperRifle').then(module => {
+      const sniperRifle = new module.SniperRifle();
+      this.abilities.set('sniperRifle', sniperRifle);
+    });
+
+    import('./Quantumization').then(module => {
+      const quantumization = new module.Quantumization();
+      this.abilities.set('quantumization', quantumization);
+    });
+
+    import('./SwiftCounter').then(module => {
+      const swiftCounter = new module.SwiftCounter();
+      this.abilities.set('swiftCounter', swiftCounter);
+    });
+
+    import('./Alzheimer').then(module => {
+      const alzheimer = new module.Alzheimer();
+      this.abilities.set('alzheimer', alzheimer);
+    });
+
+    import('./Judge').then(module => {
+      const judge = new module.Judge();
+      this.abilities.set('judge', judge);
+    });
+
+    import('./Synchronize').then(module => {
+      const synchronize = new module.Synchronize();
+      this.abilities.set('synchronize', synchronize);
+    });
+
+    import('./GhostSummoning').then(module => {
+      const ghostSummoning = new module.GhostSummoning();
+      this.abilities.set('ghostSummoning', ghostSummoning);
+    });
   }
 
   private setupEventHandlers(): void {
@@ -100,11 +136,24 @@ export class AbilityManager {
   }
 
   private mapAbilityId(abilityId: string): string {
-    // 능력 ID 매핑 테이블
+    // 능력 ID 매핑 테이블 (실제 존재하는 능력들만)
     const idMap: { [key: string]: string } = {
-      '디버그 로거': '디버그로거',
-      '디버그로거': '디버그로거',
-      'debug': '디버그로거'
+      'multipleStrike': 'multipleStrike',
+      '다중 타격': 'multipleStrike',
+      'sniperRifle': 'sniperRifle',
+      'HS.50 대물 저격소총': 'sniperRifle',
+      'quantumization': 'quantumization',
+      '양자화': 'quantumization',
+      'swiftCounter': 'swiftCounter',
+      '날렵한 반격': 'swiftCounter',
+      'alzheimer': 'alzheimer',
+      '알츠하이머': 'alzheimer',
+      'judge': 'judge',
+      '심판자': 'judge',
+      'synchronize': 'synchronize',
+      '동기화': 'synchronize',
+      'ghostSummoning': 'ghostSummoning',
+      '원귀 강령': 'ghostSummoning'
     };
     return idMap[abilityId] || abilityId;
   }
@@ -361,7 +410,7 @@ export class AbilityManager {
     if (attackerPlayer) {
       const abilities = Array.from(this.playerAbilities.values());
       await this.executeWithPriority(abilities, event);
-    }
+      }
   }
 
   private async handleAfterAttack(event: ModifiableEvent): Promise<void> {
@@ -521,6 +570,46 @@ export class AbilityManager {
   
   // 로그 추가
   addLog(message: string): void {
-    this.logs.push(`[${new Date().toISOString()}] ${message}`);
+    this.logs.push(message);
+  }
+
+  // 🆕 Phase 2: 능력 실행 메서드
+  public async executeAbility(
+    playerId: number, 
+    abilityName: string, 
+    targets: number[] = [], 
+    parameters: Record<string, any> = {}
+  ): Promise<{ success: boolean; message: string; damage?: number; heal?: number; death?: boolean; target?: number }> {
+    try {
+      const player = this.findPlayer(playerId);
+      if (!player) {
+        return { success: false, message: '플레이어를 찾을 수 없습니다.' };
+      }
+
+      const ability = this.playerAbilities.get(playerId);
+      if (!ability) {
+        return { success: false, message: '플레이어에게 할당된 능력이 없습니다.' };
+      }
+
+      // 능력 실행을 위한 컨텍스트 생성
+      const targetPlayer = targets.length > 0 ? this.findPlayer(targets[0]) : undefined;
+      const context = this.createContext(player, targetPlayer);
+      
+      // 능력 실행
+      const result = await ability.execute(context, parameters);
+      
+      return {
+        success: true,
+        message: result.message || `${abilityName} 능력을 사용했습니다.`,
+        damage: result.damage,
+        heal: result.heal,
+        death: result.death,
+        target: targets[0]
+      };
+      
+    } catch (error) {
+      console.error(`[ABILITY] 능력 실행 오류: ${error}`);
+      return { success: false, message: '능력 실행 중 오류가 발생했습니다.' };
+    }
   }
 } 
