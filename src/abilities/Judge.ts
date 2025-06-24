@@ -4,6 +4,7 @@ import { AbilityContext, Player, ModifiableEvent, AttackEvent, PlayerStatus } fr
 export class Judge extends BaseAbility {
   private passCoins: Map<number, number> = new Map(); // 플레이어별 패스코인
   private maxPassCoins: number = 3; // 최대 패스코인
+  private isAutoAssigned: boolean = false;
 
   constructor() {
     super('judge', '심판자', '자동으로 패스코인 시스템을 관리합니다.', 0, 0);
@@ -14,22 +15,40 @@ export class Judge extends BaseAbility {
     return { success: false, message: '심판자는 수동으로 능력을 사용할 수 없습니다.' };
   }
 
+  // 게임 시작시 0번 자동 배정
+  async onGameStart(event: ModifiableEvent): Promise<void> {
+    if (!this.isAutoAssigned) {
+      // 0번 플레이어로 자동 배정
+      this.ownerId = 0;
+      this.isAutoAssigned = true;
+      
+      // 체력 5000으로 설정
+      const judgePlayer = this.getOwnerPlayer();
+      if (judgePlayer) {
+        judgePlayer.hp = 5000;
+        judgePlayer.maxHp = 5000;
+      }
+      
+      console.log(`[심판자] 0번 플레이어로 자동 배정되었습니다.`);
+    }
+  }
+
   // 매턴 자동 발동
   async onTurnStart(event: ModifiableEvent): Promise<void> {
-    const currentTurn = this.getSession('current_turn') as number || 0;
-    const players = this.getSession('players') as Player[] || [];
+    const turnData = event.data as any;
+    const currentTurn = turnData.turn;
     
-    // 자신의 체력을 5000으로 설정
-    const judgePlayer = players.find(p => p.id === this.ownerId);
+    // 자신의 체력을 5000으로 설정 (매턴 회복)
+    const judgePlayer = turnData.players?.find((p: any) => p.id === this.ownerId);
     if (judgePlayer) {
       judgePlayer.hp = 5000;
       judgePlayer.maxHp = 5000;
     }
 
     // 모든 플레이어의 행동 상태 확인
-    for (const player of players) {
+    for (const player of turnData.players || []) {
       if (player.id === this.ownerId) continue; // 자신 제외
-      if (player.status === PlayerStatus.DEAD) continue; // 탈락자 제외
+      if (player.status === 'DEAD') continue; // 탈락자 제외
 
       // 행동하지 않은 플레이어에게 패스코인 적용
       if (this.isPlayerInactive(player)) {
@@ -41,12 +60,12 @@ export class Judge extends BaseAbility {
     }
   }
 
-  private isPlayerInactive(player: Player): boolean {
+  private isPlayerInactive(player: any): boolean {
     // 행동을 선택하지 않은 경우 (actionType이 없거나 PASS)
     return !player.actionType || player.actionType === 'PASS';
   }
 
-  private async applyPassCoin(player: Player, currentTurn: number): Promise<void> {
+  private async applyPassCoin(player: any, currentTurn: number): Promise<void> {
     const currentCoins = this.passCoins.get(player.id) || 0;
     const newCoins = currentCoins + 1;
     this.passCoins.set(player.id, newCoins);
@@ -54,11 +73,11 @@ export class Judge extends BaseAbility {
     console.log(`[심판자] ${player.name}에게 패스코인 적용: ${newCoins}`);
 
     // 자동 공격 실행
-    const damage = newCoins >= this.maxPassCoins ? 100 : 1;
+    const damage = newCoins >= 3 ? 100 : 1;
     await this.executeJudgeAttack(player, damage, currentTurn);
   }
 
-  private async executeJudgeAttack(target: Player, damage: number, currentTurn: number): Promise<void> {
+  private async executeJudgeAttack(target: any, damage: number, currentTurn: number): Promise<void> {
     const oldHp = target.hp;
     target.hp = Math.max(0, target.hp - damage);
     target.wasAttacked = true;
@@ -67,7 +86,7 @@ export class Judge extends BaseAbility {
 
     // 사망 처리
     if (target.hp <= 0) {
-      target.status = PlayerStatus.DEAD;
+      target.status = 'DEAD';
       console.log(`[심판자] ${target.name}이(가) 심판으로 탈락했습니다.`);
     }
 
@@ -79,24 +98,26 @@ export class Judge extends BaseAbility {
 
   // 자신을 타겟팅하는 공격을 본인에게 리다이렉트
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {
-    const data = event.data as AttackEvent;
+    const data = event.data as any;
     if (data.target === this.ownerId) {
-      data.newTarget = data.attacker; // 공격자 자신을 공격
+      data.target = data.attacker; // 공격자 자신을 공격
       event.modified = true;
       console.log(`[심판자] 심판자를 향한 공격이 ${data.attacker}에게 리다이렉트됩니다.`);
     }
   }
 
-  // 게임 시작 시 특수 설정
-  async onGameStart(event: ModifiableEvent): Promise<void> {
-    // 0번 플레이어로 자동 배정 (게임 시스템에서 처리)
-    console.log(`[심판자] 심판자 시스템이 활성화되었습니다.`);
-  }
-
-  // 심판자는 승리 불가
+  // 심판자는 승리 불가능 - 게임 종료시 승리 조건에서 제외
   async onGameEnd(event: ModifiableEvent): Promise<void> {
-    // 승리 조건에서 제외 (게임 시스템에서 처리)
-    console.log(`[심판자] 심판자는 승리 대상에서 제외됩니다.`);
+    const gameEndData = event.data as any;
+    
+    // 심판자가 승리자로 설정된 경우 제거
+    if (gameEndData.winner === this.ownerId) {
+      gameEndData.winner = null;
+      gameEndData.victoryType = 'NO_WINNER';
+      gameEndData.message = '심판자는 승리할 수 없습니다.';
+      event.modified = true;
+      console.log(`[심판자] 심판자는 승리 대상에서 제외됩니다.`);
+    }
   }
 
   // 패스코인 상태 조회
@@ -146,5 +167,10 @@ export class Judge extends BaseAbility {
       maxCoins,
       playersAtMaxCoins
     };
+  }
+
+  // 심판자 여부 확인
+  isJudge(playerId: number): boolean {
+    return playerId === this.ownerId;
   }
 } 

@@ -1,63 +1,112 @@
 import { BaseAbility } from './BaseAbility';
 import { AbilityContext } from '../types/game.types';
+import { Player } from '../types/game.types';
+import { ModifiableEvent } from '../types/game.types';
 
 export class FateCross extends BaseAbility {
+  private isEarlyProtectionActive: boolean = false;
+  private hasBeenUsed: boolean = false;
+
   constructor() {
     super(
       'fateCross',
       '운명 교차',
-      '초반 보호 규칙 첫번째 선택시 활성화, 대상과 번호가 교체됩니다.',
+      '초반 보호 규칙 첫번째 선택시 활성화되어 대상과 번호를 교체합니다.',
       0, // maxCooldown
-      -1 // 무제한 사용
+      1 // 한 번만 사용
     );
   }
 
-  async execute(context: AbilityContext): Promise<{ success: boolean; message: string }> {
-    try {
-      const { target } = context;
-      const owner = this.getOwnerPlayer();
+  async execute(context: AbilityContext, parameters: Record<string, any> = {}): Promise<{ success: boolean; message: string; damage?: number; heal?: number; death?: boolean; target?: number }> {
+    const targetId = parameters.targetId;
+    if (!targetId) {
+      return { success: false, message: '대상을 지정해야 합니다.' };
+    }
+
+    // 이미 사용했는지 확인
+    if (this.hasBeenUsed) {
+      return { success: false, message: '이미 사용했습니다.' };
+    }
+
+    // 초반 보호 규칙이 활성화되었는지 확인
+    if (!this.isEarlyProtectionActive) {
+      return { success: false, message: '초반 보호 규칙이 활성화되지 않았습니다.' };
+    }
+
+    const target = context.players.find(p => p.id === targetId);
+    if (!target) {
+      return { success: false, message: '대상을 찾을 수 없습니다.' };
+    }
+
+    // 자신과는 교체 불가
+    if (targetId === this.ownerId) {
+      return { success: false, message: '자신과는 번호를 교체할 수 없습니다.' };
+    }
+
+    // 번호 교체 실행
+    await this.swapPlayerNumbers(context.player, target);
+    this.hasBeenUsed = true;
+
+    return {
+      success: true,
+      message: `${context.player.name}과 ${target.name}의 번호가 교체되었습니다!`,
+      target: targetId
+    };
+  }
+
+  private async swapPlayerNumbers(player1: Player, player2: Player): Promise<void> {
+    // 플레이어 ID 교체
+    const tempId = player1.id;
+    player1.id = player2.id;
+    player2.id = tempId;
+
+    // 게임 시스템에 번호 교체 알림
+    this.setSession('number_swap', {
+      player1Id: player2.id, // 교체 후 ID
+      player2Id: player1.id, // 교체 후 ID
+      turn: this.getSession('current_turn') as number || 0
+    });
+
+    console.log(`[운명 교차] ${player1.name}(ID: ${player1.id})과 ${player2.name}(ID: ${player2.id})의 번호가 교체되었습니다.`);
+  }
+
+  // 초반 보호 규칙 활성화 체크
+  async onTurnStart(event: ModifiableEvent): Promise<void> {
+    const currentTurn = this.getSession('current_turn') as number || 0;
+    
+    // 초반 보호 규칙은 1-3턴 사이에 첫번째 선택으로 활성화
+    if (currentTurn <= 3 && !this.isEarlyProtectionActive) {
+      // 게임 시스템에서 초반 보호 규칙 상태 확인
+      const earlyProtectionStatus = this.getSession('early_protection_status') as any;
       
-      if (!owner) {
-        return { success: false, message: '소유자를 찾을 수 없습니다.' };
+      if (earlyProtectionStatus && earlyProtectionStatus.isFirstChoice) {
+        this.isEarlyProtectionActive = true;
+        console.log(`[운명 교차] 초반 보호 규칙 첫번째 선택으로 활성화되었습니다.`);
       }
-
-      if (!target) {
-        return { success: false, message: '대상을 지정해야 합니다.' };
-      }
-
-      if (target.id === owner.id) {
-        return { success: false, message: '자신과는 교체할 수 없습니다.' };
-      }
-
-      // 번호 교체
-      const ownerNumber = owner.id;
-      const targetNumber = target.id;
-      
-      // 플레이어 ID 교체
-      owner.id = targetNumber;
-      target.id = ownerNumber;
-      
-      // 이름도 교체 (선택사항)
-      const ownerName = owner.name;
-      owner.name = target.name;
-      target.name = ownerName;
-
-      this.addLog(context, `[운명 교차] ${ownerName}과 ${target.name}의 번호가 교체되었습니다.`);
-      
-      return { 
-        success: true, 
-        message: `${target.name}과 번호가 교체되었습니다.` 
-      };
-      
-    } catch (error) {
-      console.error('[운명 교차] 실행 오류:', error);
-      return { success: false, message: '운명 교차 실행 중 오류가 발생했습니다.' };
     }
   }
 
-  // 초반 보호 규칙에서만 활성화
-  canUseAbility(context: AbilityContext): boolean {
-    const currentTurn = context.currentTurn;
-    return currentTurn <= 3; // 초반 3턴까지만 사용 가능
+  // 초반 보호 규칙 상태 업데이트 (게임 시스템에서 호출)
+  updateEarlyProtectionStatus(isFirstChoice: boolean): void {
+    this.setSession('early_protection_status', {
+      isFirstChoice,
+      activated: isFirstChoice
+    });
+  }
+
+  // 능력 사용 가능 여부 체크
+  protected canUseAbility(context: AbilityContext): boolean {
+    // 초반 보호 규칙이 활성화되어 있고 아직 사용하지 않았을 때만 사용 가능
+    return this.isEarlyProtectionActive && !this.hasBeenUsed && this.isActive;
+  }
+
+  // 초반 보호 규칙 활성화 여부 확인
+  getEarlyProtectionActive(): boolean {
+    return this.isEarlyProtectionActive;
+  }
+
+  // 번호 교체 이력 확인
+  hasNumberBeenSwapped(): boolean {
+    return this.hasBeenUsed;
   }
 } 
