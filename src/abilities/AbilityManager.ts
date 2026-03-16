@@ -35,7 +35,11 @@ import { FateExchange } from './FateExchange';
 import { RisingAshes } from './RisingAshes';
 
 // 이벤트 타입 → 능력 핸들러 메서드 매핑
-const EVENT_HANDLER_MAP: Record<string, keyof BaseAbility> = {
+type AbilityEventHandler = {
+  [K in keyof BaseAbility]: BaseAbility[K] extends (event: ModifiableEvent) => Promise<void> ? K : never;
+}[keyof BaseAbility];
+
+const EVENT_HANDLER_MAP: Partial<Record<GameEventType, AbilityEventHandler>> = {
   [GameEventType.BEFORE_ATTACK]: 'onBeforeAttack',
   [GameEventType.AFTER_ATTACK]: 'onAfterAttack',
   [GameEventType.BEFORE_DEFEND]: 'onBeforeDefend',
@@ -57,7 +61,7 @@ const EVENT_HANDLER_MAP: Record<string, keyof BaseAbility> = {
 };
 
 // setupEventHandlers에서 등록할 이벤트 타입 목록
-const HANDLED_EVENT_TYPES: GameEventType[] = Object.keys(EVENT_HANDLER_MAP) as GameEventType[];
+const HANDLED_EVENT_TYPES = Object.keys(EVENT_HANDLER_MAP) as GameEventType[];
 
 export class AbilityManager {
   private static instance: AbilityManager | null = null; // 🔧 추가: singleton 인스턴스
@@ -310,9 +314,9 @@ export class AbilityManager {
     const handlerName = EVENT_HANDLER_MAP[event.type];
     if (!handlerName) return;
     
-    const handler = (ability as any)[handlerName];
+    const handler = ability[handlerName];
     if (typeof handler === 'function') {
-      await handler.call(ability, event);
+      await (handler as (event: ModifiableEvent) => Promise<void>).call(ability, event);
     }
   }
   
