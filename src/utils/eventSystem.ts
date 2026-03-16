@@ -31,13 +31,19 @@ export class EventSystem {
   private currentIndex: number;
   private maxHistory: number;
   private isDisposed: boolean = false;
+  private debugEnabled: boolean = false;
 
-  constructor() {
+  constructor(options?: { debug?: boolean }) {
     this.handlers = new Map();
     this.eventHistory = [];
     this.snapshots = [];
     this.currentIndex = -1;
     this.maxHistory = 20;
+    this.debugEnabled = options?.debug ?? false;
+  }
+
+  setDebug(enabled: boolean): void {
+    this.debugEnabled = enabled;
   }
 
   on(eventType: GameEventType, handler: EventHandler): void {
@@ -46,23 +52,18 @@ export class EventSystem {
       return;
     }
     
-    console.log(`[EVENT REGISTER] 이벤트 핸들러 등록 시도: ${eventType}`);
-    console.log(`[EVENT REGISTER] 호출 스택:`, new Error().stack);
-    
     if (!this.handlers.has(eventType)) {
       this.handlers.set(eventType, []);
-      console.log(`[EVENT REGISTER] 새로운 이벤트 타입 생성: ${eventType}`);
     }
     
     const currentHandlers = this.handlers.get(eventType)!;
-    console.log(`[EVENT REGISTER] ${eventType} 기존 핸들러 수: ${currentHandlers.length}`);
-    
     currentHandlers.push(handler);
-    console.log(`[EVENT REGISTER] ${eventType} 핸들러 등록 완료. 총 핸들러 수: ${currentHandlers.length}`);
     
-    // 핸들러 중복 경고
-    if (currentHandlers.length > 1) {
-      console.warn(`[EVENT REGISTER] ⚠️ 중복 핸들러 감지! ${eventType}에 ${currentHandlers.length}개 등록됨`);
+    if (this.debugEnabled) {
+      console.log(`[EVENT REGISTER] ${eventType} 핸들러 등록 완료. 총 핸들러 수: ${currentHandlers.length}`);
+      if (currentHandlers.length > 1) {
+        console.warn(`[EVENT REGISTER] ⚠️ 중복 핸들러 감지! ${eventType}에 ${currentHandlers.length}개 등록됨`);
+      }
     }
   }
 
@@ -139,29 +140,24 @@ export class EventSystem {
       return;
     }
     
-    console.log(`[EVENT DEBUG] === 이벤트 발생 ===`);
-    console.log(`[EVENT DEBUG] 타입: ${event.type}`);
-    console.log(`[EVENT DEBUG] 데이터:`, event.data as any);
-    
+    if (this.debugEnabled) {
+      console.log(`[EVENT] ${event.type}`, event.data);
+    }
+
     // 이벤트 히스토리에 추가
     this.eventHistory.push(event);
 
     // 이벤트 타입에 등록된 모든 핸들러 실행
     const handlers = this.handlers.get(event.type) || [];
-    console.log(`[EVENT DEBUG] 핸들러 수: ${handlers.length}`);
     
     for (const handler of handlers) {
-      console.log(`[EVENT DEBUG] 핸들러 실행 전 데이터:`, event.data as any);
       await handler(event);
-      console.log(`[EVENT DEBUG] 핸들러 실행 후 데이터:`, event.data as any);
       
-      // 🆕 이벤트가 취소되면 중단
+      // 이벤트가 취소되면 중단
       if (event.cancelled) {
         break;
       }
     }
-    
-    console.log(`[EVENT DEBUG] === 이벤트 완료 ===`);
   }
 
   // 스냅샷 생성
