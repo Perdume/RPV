@@ -58,6 +58,12 @@ const EVENT_HANDLER_MAP: Partial<Record<GameEventType, AbilityEventHandler>> = {
   [GameEventType.STATUS_EFFECT_APPLIED]: 'onStatusEffectApplied',
   [GameEventType.STATUS_EFFECT_REMOVED]: 'onStatusEffectRemoved',
   [GameEventType.ABILITY_CHAIN_TRIGGERED]: 'onAbilityChainTriggered',
+  // 🆕 이벤트 개입 지점 매핑
+  [GameEventType.BEFORE_INPUT]: 'onBeforeInput',
+  [GameEventType.AFTER_INPUT]: 'onAfterInput',
+  [GameEventType.BEFORE_ABILITY_USE]: 'onBeforeAbilityUse',
+  [GameEventType.AFTER_ABILITY_USE]: 'onAfterAbilityUse',
+  [GameEventType.BEFORE_LOG]: 'onBeforeLog',
 };
 
 // setupEventHandlers에서 등록할 이벤트 타입 목록
@@ -465,12 +471,51 @@ export class AbilityManager {
         return { success: false, message: '플레이어에게 할당된 능력이 없습니다.' };
       }
 
+      // 🆕 능력 실행 전 이벤트 발생 (능력처리 개입 지점)
+      const beforeAbilityEvent: ModifiableEvent = {
+        type: GameEventType.BEFORE_ABILITY_USE,
+        timestamp: Date.now(),
+        data: {
+          playerId,
+          abilityId: abilityName,
+          targets,
+          parameters
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(beforeAbilityEvent);
+
+      // 이벤트가 취소되면 능력 실행 중단
+      if (beforeAbilityEvent.cancelled) {
+        return { success: false, message: '능력이 다른 능력에 의해 차단되었습니다.' };
+      }
+
       // 능력 실행을 위한 컨텍스트 생성
       const targetPlayer = targets.length > 0 ? this.findPlayer(targets[0]) : undefined;
       const context = this.createContext(player, targetPlayer);
       
       // 능력 실행
       const result = await ability.execute(context, parameters);
+
+      // 🆕 능력 실행 후 이벤트 발생 (능력처리 개입 지점)
+      const afterAbilityEvent: ModifiableEvent = {
+        type: GameEventType.AFTER_ABILITY_USE,
+        timestamp: Date.now(),
+        data: {
+          playerId,
+          abilityId: abilityName,
+          success: result.success,
+          message: result.message || `${abilityName} 능력을 사용했습니다.`,
+          damage: result.damage,
+          heal: result.heal,
+          death: result.death,
+          target: targets[0]
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(afterAbilityEvent);
       
       return {
         success: true,

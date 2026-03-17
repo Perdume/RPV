@@ -465,6 +465,13 @@ export abstract class BaseAbility implements Ability {
   async onAbilityChainTriggered(event: ModifiableEvent): Promise<void> {}
   async onConditionalExecutionFailed(event: ModifiableEvent): Promise<void> {}
 
+  // 🆕 이벤트 개입 지점 핸들러들
+  async onBeforeInput(event: ModifiableEvent): Promise<void> {}
+  async onAfterInput(event: ModifiableEvent): Promise<void> {}
+  async onBeforeAbilityUse(event: ModifiableEvent): Promise<void> {}
+  async onAfterAbilityUse(event: ModifiableEvent): Promise<void> {}
+  async onBeforeLog(event: ModifiableEvent): Promise<void> {}
+
   protected createContext(event: ModifiableEvent): AbilityContext {
     if (!this.abilityManager) {
       throw new Error('AbilityManager not set');
