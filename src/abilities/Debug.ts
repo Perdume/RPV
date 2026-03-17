@@ -8,46 +8,47 @@ export class Debug extends BaseAbility {
   }
 
   async onBeforeAttack(event: ModifiableEvent): Promise<void> {
+    const data = event.data as any;
     const owner = this.getOwner();
     console.log(`[DEBUG ABILITY] === Debug onBeforeAttack 시작 ===`);
-    console.log(`[DEBUG ABILITY] Owner: ${owner}, 공격자: ${event.data.attacker}`);
-    console.log(`[DEBUG ABILITY] 입력 이벤트 데이터:`, event.data);
+    console.log(`[DEBUG ABILITY] Owner: ${owner}, 공격자: ${data.attacker}`);
+    console.log(`[DEBUG ABILITY] 입력 이벤트 데이터:`, data);
     
     // 중복 실행 방지
-    if (this.getTurn('already_processed', event.data.turn || 0, schemas.boolean)) {
+    if (this.getTurn('already_processed', data.turn || 0, schemas.boolean)) {
       console.log(`[DEBUG ABILITY] 이미 처리된 턴 - 스킵`);
       return;
     }
     
-    if (owner === event.data.attacker) {
+    if (owner === data.attacker) {
       console.log(`[DEBUG ABILITY] 공격자와 Owner 일치 - 능력 발동`);
       
       // 처리 완료 플래그 설정
-      this.setTurn('already_processed', true, event.data.turn || 0, schemas.boolean);
+      this.setTurn('already_processed', true, data.turn || 0, schemas.boolean);
       
       // 공격 횟수 카운트
       const attackCount = this.getPermanent<number>('attack_count', schemas.number);
       await this.setPermanent('attack_count', attackCount + 1, schemas.number);
       console.log(`[DEBUG ABILITY] 공격 횟수 업데이트: ${attackCount} -> ${attackCount + 1}`);
       
-      console.log(`[DEBUG ABILITY] 원래 타겟: ${event.data.target}`);
-      if(event.data.target == 2) {
-        event.data.target = 3;
+      console.log(`[DEBUG ABILITY] 원래 타겟: ${data.target}`);
+      if(data.target == 2) {
+        data.target = 3;
         console.log(`[DEBUG ABILITY] 타겟 변경: 2 -> 3`);
       }
-      console.log(`[DEBUG ABILITY] 최종 타겟: ${event.data.target}`);
+      console.log(`[DEBUG ABILITY] 최종 타겟: ${data.target}`);
       
       // 데미지 설정
-      console.log(`[DEBUG ABILITY] 원래 데미지: ${event.data.damage}`);
-      event.data.damage = 10;
-      console.log(`[DEBUG ABILITY] 변경된 데미지: ${event.data.damage}`);
+      console.log(`[DEBUG ABILITY] 원래 데미지: ${data.damage}`);
+      data.damage = 10;
+      console.log(`[DEBUG ABILITY] 변경된 데미지: ${data.damage}`);
       
-      this.setTurn('attacked_this_turn', true, event.data.turn || 0, schemas.boolean);
+      this.setTurn('attacked_this_turn', true, data.turn || 0, schemas.boolean);
     } else {
       console.log(`[DEBUG ABILITY] 공격자와 Owner 불일치 - 능력 발동 안 함`);
     }
     
-    console.log(`[DEBUG ABILITY] 최종 이벤트 데이터:`, event.data);
+    console.log(`[DEBUG ABILITY] 최종 이벤트 데이터:`, data);
     console.log(`[DEBUG ABILITY] === Debug onBeforeAttack 완료 ===`);
   }
 
@@ -112,7 +113,7 @@ export class Debug extends BaseAbility {
     const owner = this.getOwner();
     if (!owner) return;
 
-    const turnNumber = event.data.turn;
+    const turnNumber = (event.data as any).turn;
     
     // 이번 턴 공격 여부 확인
     const attackedThisTurn = this.getTurn<boolean>('attacked_this_turn', turnNumber, schemas.boolean);
@@ -260,3 +261,5 @@ export class Debug extends BaseAbility {
     console.groupEnd();
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('debug', () => new Debug(), ['디버그로거']);

@@ -2,37 +2,11 @@ import { EventSystem } from '../utils/eventSystem';
 import { GameEventType, ModifiableEvent, Ability, Player, AbilityContext } from '../types/game.types';
 import { BaseAbility } from './BaseAbility';
 import { StatusEffectManager } from '../utils/StatusEffectManager';
+import { AbilityRegistry } from './AbilityRegistry';
 
-// 🆕 정적 import로 변경
-import { MultipleStrike } from './MultipleStrike';
-import { SniperRifle } from './SniperRifle';
-import { Quantumization } from './Quantumization';
-import { SwiftCounter } from './SwiftCounter';
-import { Alzheimer } from './Alzheimer';
-import { Judge } from './Judge';
-import { Synchronize } from './Synchronize';
-import { GhostSummoning } from './GhostSummoning';
-import { Confusion } from './Confusion';
-import { WeaponBreak } from './WeaponBreak';
-import { PreemptivePrediction } from './PreemptivePrediction';
-import { DiscordDissonance } from './DiscordDissonance';
-import { EndOfDestruction } from './EndOfDestruction';
-import { GreatFailure } from './GreatFailure';
-import { LiveToDie } from './LiveToDie';
-import { PainfulMemory } from './PainfulMemory';
-import { ShadowInDarkness } from './ShadowInDarkness';
-import { WoundAnalysis } from './WoundAnalysis';
-import { TargetManipulation } from './TargetManipulation';
-import { SuppressedFreedom } from './SuppressedFreedom';
-import { Unseeable } from './Unseeable';
-import { WillLoss } from './WillLoss';
-import { FallenCrown } from './FallenCrown';
-import { FateCross } from './FateCross';
-import { BurningEmbers } from './BurningEmbers';
-import { Annihilation } from './Annihilation';
-import { PlayingDead } from './PlayingDead';
-import { FateExchange } from './FateExchange';
-import { RisingAshes } from './RisingAshes';
+// 모든 능력을 AbilityRegistry에 등록합니다 (side-effect import).
+// 새 능력 추가 시에는 src/abilities/index.ts 만 수정하면 됩니다.
+import './index';
 
 // 이벤트 타입 → 능력 핸들러 메서드 매핑
 type AbilityEventHandler = {
@@ -58,6 +32,12 @@ const EVENT_HANDLER_MAP: Partial<Record<GameEventType, AbilityEventHandler>> = {
   [GameEventType.STATUS_EFFECT_APPLIED]: 'onStatusEffectApplied',
   [GameEventType.STATUS_EFFECT_REMOVED]: 'onStatusEffectRemoved',
   [GameEventType.ABILITY_CHAIN_TRIGGERED]: 'onAbilityChainTriggered',
+  // 🆕 이벤트 개입 지점 매핑
+  [GameEventType.BEFORE_INPUT]: 'onBeforeInput',
+  [GameEventType.AFTER_INPUT]: 'onAfterInput',
+  [GameEventType.BEFORE_ABILITY_USE]: 'onBeforeAbilityUse',
+  [GameEventType.AFTER_ABILITY_USE]: 'onAfterAbilityUse',
+  [GameEventType.BEFORE_LOG]: 'onBeforeLog',
 };
 
 // setupEventHandlers에서 등록할 이벤트 타입 목록
@@ -148,40 +128,11 @@ export class AbilityManager {
   }
 
   private registerDefaultAbilities(): void {
-    // 기본 능력들 등록 (정적 import 사용)
-    this.abilities.set('multipleStrike', new MultipleStrike());
-    this.abilities.set('sniperRifle', new SniperRifle());
-    this.abilities.set('quantumization', new Quantumization());
-    this.abilities.set('swiftCounter', new SwiftCounter());
-    this.abilities.set('alzheimer', new Alzheimer());
-    this.abilities.set('judge', new Judge());
-    this.abilities.set('synchronize', new Synchronize());
-    this.abilities.set('ghostSummoning', new GhostSummoning());
-    this.abilities.set('confusion', new Confusion());
-    this.abilities.set('weaponBreak', new WeaponBreak());
-    this.abilities.set('preemptivePrediction', new PreemptivePrediction());
-    this.abilities.set('discordDissonance', new DiscordDissonance());
-    this.abilities.set('endOfDestruction', new EndOfDestruction());
-    this.abilities.set('greatFailure', new GreatFailure());
-    this.abilities.set('liveToDie', new LiveToDie());
-    this.abilities.set('painfulMemory', new PainfulMemory());
-    this.abilities.set('shadowInDarkness', new ShadowInDarkness());
-    this.abilities.set('woundAnalysis', new WoundAnalysis());
-    
-    // Phase 5: 새로 구현한 능력들
-    this.abilities.set('targetManipulation', new TargetManipulation());
-    this.abilities.set('suppressedFreedom', new SuppressedFreedom());
-    this.abilities.set('unseeable', new Unseeable());
-    this.abilities.set('willLoss', new WillLoss());
-    this.abilities.set('fallenCrown', new FallenCrown());
-    this.abilities.set('fateCross', new FateCross());
-    this.abilities.set('burningEmbers', new BurningEmbers());
-    this.abilities.set('annihilation', new Annihilation());
-    this.abilities.set('playingDead', new PlayingDead());
-
-    // Phase 7: 최고난이도 능력들
-    this.abilities.set('fateExchange', new FateExchange());
-    this.abilities.set('risingAshes', new RisingAshes());
+    // AbilityRegistry에 등록된 모든 능력을 로드합니다.
+    // 새 능력을 추가하려면 src/abilities/index.ts 에 import 한 줄만 추가하세요.
+    for (const [id, ability] of AbilityRegistry.createAll()) {
+      this.abilities.set(id, ability);
+    }
   }
 
   private setupEventHandlers(): void {
@@ -241,26 +192,9 @@ export class AbilityManager {
   }
 
   private mapAbilityId(abilityId: string): string {
-    // 능력 ID 매핑 테이블 (실제 존재하는 능력들만)
-    const idMap: { [key: string]: string } = {
-      'multipleStrike': 'multipleStrike',
-      '다중 타격': 'multipleStrike',
-      'sniperRifle': 'sniperRifle',
-      'HS.50 대물 저격소총': 'sniperRifle',
-      'quantumization': 'quantumization',
-      '양자화': 'quantumization',
-      'swiftCounter': 'swiftCounter',
-      '날렵한 반격': 'swiftCounter',
-      'alzheimer': 'alzheimer',
-      '알츠하이머': 'alzheimer',
-      'judge': 'judge',
-      '심판자': 'judge',
-      'synchronize': 'synchronize',
-      '동기화': 'synchronize',
-      'ghostSummoning': 'ghostSummoning',
-      '원귀 강령': 'ghostSummoning'
-    };
-    return idMap[abilityId] || abilityId;
+    // AbilityRegistry를 통해 별칭(한글 이름 등)을 정식 ID로 변환합니다.
+    // 새 능력의 별칭은 각 능력 파일에서 AbilityRegistry.register() 호출 시 등록합니다.
+    return AbilityRegistry.resolveAlias(abilityId);
   }
 
   private findPlayer(playerId: number): Player | undefined {
@@ -465,12 +399,51 @@ export class AbilityManager {
         return { success: false, message: '플레이어에게 할당된 능력이 없습니다.' };
       }
 
+      // 🆕 능력 실행 전 이벤트 발생 (능력처리 개입 지점)
+      const beforeAbilityEvent: ModifiableEvent = {
+        type: GameEventType.BEFORE_ABILITY_USE,
+        timestamp: Date.now(),
+        data: {
+          playerId,
+          abilityId: abilityName,
+          targets,
+          parameters
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(beforeAbilityEvent);
+
+      // 이벤트가 취소되면 능력 실행 중단
+      if (beforeAbilityEvent.cancelled) {
+        return { success: false, message: '능력이 다른 능력에 의해 차단되었습니다.' };
+      }
+
       // 능력 실행을 위한 컨텍스트 생성
       const targetPlayer = targets.length > 0 ? this.findPlayer(targets[0]) : undefined;
       const context = this.createContext(player, targetPlayer);
       
       // 능력 실행
       const result = await ability.execute(context, parameters);
+
+      // 🆕 능력 실행 후 이벤트 발생 (능력처리 개입 지점)
+      const afterAbilityEvent: ModifiableEvent = {
+        type: GameEventType.AFTER_ABILITY_USE,
+        timestamp: Date.now(),
+        data: {
+          playerId,
+          abilityId: abilityName,
+          success: result.success,
+          message: result.message || `${abilityName} 능력을 사용했습니다.`,
+          damage: result.damage,
+          heal: result.heal,
+          death: result.death,
+          target: targets[0]
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(afterAbilityEvent);
       
       return {
         success: true,

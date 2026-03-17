@@ -95,3 +95,5 @@ export class Synchronize extends BaseAbility {
     return null; // 실제 구현에서는 GameState 참조
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('synchronize', () => new Synchronize(), ['동기화']);

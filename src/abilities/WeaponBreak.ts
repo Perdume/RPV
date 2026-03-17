@@ -89,3 +89,5 @@ export class WeaponBreak extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('weaponBreak', () => new WeaponBreak(), ['무장 파열']);

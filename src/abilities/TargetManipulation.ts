@@ -61,3 +61,5 @@ export class TargetManipulation extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('targetManipulation', () => new TargetManipulation(), ['타겟 조작']);

@@ -237,6 +237,224 @@ describe('Numbers Game Integration Tests - 개선판', () => {
       expect(alivePlayers.length).toBeLessThanOrEqual(3);
     });
   });
+
+  describe('이벤트 개입 지점 테스트 (입력 / 능력처리 / 공개로그)', () => {
+    it('BEFORE_INPUT 이벤트로 입력을 취소할 수 있음', async () => {
+      let inputCancelled = false;
+
+      eventSystem.on(GameEventType.BEFORE_INPUT, async (event) => {
+        const data = event.data as { action: PlayerAction; playerId: number };
+        if (data.playerId === 1) {
+          event.cancelled = true;
+          inputCancelled = true;
+        }
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ATTACK' }
+      ];
+
+      const result = await gameEngine.processTurn(actions);
+
+      expect(inputCancelled).toBe(true);
+      // 취소된 공격으로 피해가 없어야 함
+      const targetPlayer = result.players.find(p => p.id === 2);
+      expect(targetPlayer?.hp).toBe(8);
+    });
+
+    it('BEFORE_INPUT 이벤트로 입력 액션 타입을 변경할 수 있음', async () => {
+      eventSystem.on(GameEventType.BEFORE_INPUT, async (event) => {
+        const data = event.data as { action: PlayerAction; playerId: number };
+        if (data.playerId === 1 && data.action.actionType === 'ATTACK') {
+          data.action.actionType = 'PASS';
+          event.modified = true;
+        }
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ATTACK' }
+      ];
+
+      const result = await gameEngine.processTurn(actions);
+
+      // 공격이 PASS로 변경되어 피해가 없어야 함
+      const targetPlayer = result.players.find(p => p.id === 2);
+      expect(targetPlayer?.hp).toBe(8);
+    });
+
+    it('AFTER_INPUT 이벤트가 입력 처리 후 발생함', async () => {
+      let afterInputFired = false;
+
+      eventSystem.on(GameEventType.AFTER_INPUT, async (event) => {
+        afterInputFired = true;
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ATTACK' }
+      ];
+
+      await gameEngine.processTurn(actions);
+      expect(afterInputFired).toBe(true);
+    });
+
+    it('BEFORE_ABILITY_USE 이벤트로 능력 실행을 취소할 수 있음', async () => {
+      abilityManager.assignAbility(1, 'multipleStrike');
+
+      let abilityCancelled = false;
+
+      eventSystem.on(GameEventType.BEFORE_ABILITY_USE, async (event) => {
+        event.cancelled = true;
+        abilityCancelled = true;
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ABILITY', abilityId: 'multipleStrike' }
+      ];
+
+      const result = await gameEngine.processTurn(actions);
+
+      expect(abilityCancelled).toBe(true);
+      const hasBlockedLog = result.logs.some(log => log.includes('차단'));
+      expect(hasBlockedLog).toBe(true);
+    });
+
+    it('AFTER_ABILITY_USE 이벤트에 능력 실행 결과가 포함됨', async () => {
+      abilityManager.assignAbility(1, 'multipleStrike');
+
+      let afterAbilityData: any = null;
+
+      eventSystem.on(GameEventType.AFTER_ABILITY_USE, async (event) => {
+        afterAbilityData = event.data;
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ABILITY', abilityId: 'multipleStrike' }
+      ];
+
+      await gameEngine.processTurn(actions);
+
+      expect(afterAbilityData).not.toBeNull();
+      expect(afterAbilityData.playerId).toBe(1);
+      expect(afterAbilityData.abilityId).toBe('multipleStrike');
+      expect(typeof afterAbilityData.success).toBe('boolean');
+    });
+
+    it('BEFORE_LOG 이벤트로 공개 로그를 필터링할 수 있음', async () => {
+      eventSystem.on(GameEventType.BEFORE_LOG, async (event) => {
+        const data = event.data as { logs: string[]; turn: number };
+        // 공격 로그를 제거
+        data.logs = data.logs.filter(log => !log.includes('공격'));
+        event.modified = true;
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ATTACK' }
+      ];
+
+      const result = await gameEngine.processTurn(actions);
+
+      // 공격 관련 로그가 숨겨졌는지 확인
+      const hasAttackLog = result.logs.some(log => log.includes('공격'));
+      expect(hasAttackLog).toBe(false);
+    });
+
+    it('BEFORE_LOG 이벤트로 공개 로그에 내용을 추가할 수 있음', async () => {
+      eventSystem.on(GameEventType.BEFORE_LOG, async (event) => {
+        const data = event.data as { logs: string[]; turn: number };
+        data.logs.push(`[테스트] 능력이 공개 로그에 추가한 메시지 (${data.turn}턴)`);
+        event.modified = true;
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ATTACK' }
+      ];
+
+      const result = await gameEngine.processTurn(actions);
+
+      const hasCustomLog = result.logs.some(log => log.includes('[테스트] 능력이 공개 로그에 추가한 메시지'));
+      expect(hasCustomLog).toBe(true);
+    });
+
+    it('BEFORE_LOG 이벤트를 수정하지 않으면 원본 로그가 유지됨', async () => {
+      eventSystem.on(GameEventType.BEFORE_LOG, async (event) => {
+        // event.modified를 true로 설정하지 않음
+      });
+
+      const actions: PlayerAction[] = [
+        { playerId: 1, targetId: 2, actionType: 'ATTACK' }
+      ];
+
+      const result = await gameEngine.processTurn(actions);
+
+      // 로그가 있어야 함
+      expect(result.logs.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('AbilityRegistry 자동 등록 테스트', () => {
+  it('AbilityRegistry에 모든 게임 능력이 등록되어 있음', () => {
+    const { AbilityRegistry } = require('../abilities/AbilityRegistry');
+
+    const expectedIds = [
+      'multipleStrike', 'sniperRifle', 'quantumization', 'swiftCounter',
+      'alzheimer', 'judge', 'synchronize', 'ghostSummoning',
+      'confusion', 'weaponBreak', 'preemptivePrediction', 'discordDissonance',
+      'endOfDestruction', 'greatFailure', 'liveToDie', 'painfulMemory',
+      'shadowInDarkness', 'woundAnalysis', 'targetManipulation', 'suppressedFreedom',
+      'unseeable', 'willLoss', 'fallenCrown', 'fateCross',
+      'burningEmbers', 'annihilation', 'playingDead', 'fateExchange',
+      'risingAshes',
+    ];
+
+    const registeredIds = AbilityRegistry.getIds();
+    for (const id of expectedIds) {
+      expect(registeredIds).toContain(id);
+    }
+  });
+
+  it('AbilityRegistry 한글 별칭으로 정식 ID를 조회할 수 있음', () => {
+    const { AbilityRegistry } = require('../abilities/AbilityRegistry');
+
+    expect(AbilityRegistry.resolveAlias('다중 타격')).toBe('multipleStrike');
+    expect(AbilityRegistry.resolveAlias('알츠하이머')).toBe('alzheimer');
+    expect(AbilityRegistry.resolveAlias('심판자')).toBe('judge');
+    expect(AbilityRegistry.resolveAlias('동기화')).toBe('synchronize');
+    expect(AbilityRegistry.resolveAlias('원귀 강령')).toBe('ghostSummoning');
+    expect(AbilityRegistry.resolveAlias('날렵한 반격')).toBe('swiftCounter');
+    // 이미 정식 ID면 그대로 반환
+    expect(AbilityRegistry.resolveAlias('multipleStrike')).toBe('multipleStrike');
+    // 등록되지 않은 값은 그대로 반환
+    expect(AbilityRegistry.resolveAlias('unknownAbility')).toBe('unknownAbility');
+  });
+
+  it('AbilityRegistry.createAll()이 모든 능력 인스턴스를 생성함', () => {
+    const { AbilityRegistry } = require('../abilities/AbilityRegistry');
+
+    const all = AbilityRegistry.createAll();
+    expect(all.size).toBeGreaterThanOrEqual(29); // 29개 게임 능력 이상
+    expect(all.has('multipleStrike')).toBe(true);
+    expect(all.has('alzheimer')).toBe(true);
+    expect(all.has('risingAshes')).toBe(true);
+  });
+
+  it('AbilityManager가 레지스트리 기반으로 한글 별칭 능력을 할당할 수 있음', () => {
+    const { AbilityManager } = require('../abilities/AbilityManager');
+    const { EventSystem } = require('../utils/eventSystem');
+
+    const es = new EventSystem();
+    const am = new AbilityManager(es);
+
+    am.setGameState({ players: [{ id: 1, name: '테스트' } as any] });
+    // 한글 별칭으로 할당
+    am.assignAbility(1, '다중 타격');
+    const ability = am.getPlayerAbility(1);
+    expect(ability).toBeDefined();
+    expect(ability!.id).toBe('multipleStrike');
+
+    am.dispose();
+    es.dispose();
+  });
 });
 
 // 개선된 헬퍼 함수들

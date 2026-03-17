@@ -12,7 +12,9 @@ import {
   GameSnapshot,
   GameSessionData,
   StatusEffect,
-  AttackEvent
+  AttackEvent,
+  InputEvent,
+  LogFilterEvent
 } from '../types/game.types';
 import { EventSystem } from '../utils/eventSystem';
 import { AbilityManager } from '../abilities/AbilityManager';
@@ -465,34 +467,111 @@ export class TurnProcessor {
     // 1. 턴 시작 이벤트 (새로운 메서드 사용)
     await this.emitTurnStartEvent();
 
-    // 2. 액션 처리
-    await this.processActions(actions, logs);
+    // 🆕 2. 입력 개입: 각 행동을 처리하기 전 BEFORE_INPUT 이벤트로 능력 개입 허용
+    const filteredActions = await this.filterInputsWithEvents(actions, logs);
 
-    // 3. 상태 효과 업데이트
+    // 3. 액션 처리
+    await this.processActions(filteredActions, logs);
+
+    // 4. 상태 효과 업데이트
     this.updateStatusEffects(logs);
 
-    // 4. 데스존 체크
+    // 5. 데스존 체크
     const isDeathZone = this.checkDeathZone(turnNumber, logs);
 
-    // 5. 게임 상태 업데이트
+    // 6. 게임 상태 업데이트
     this.updateGameState(turnNumber, logs, isDeathZone);
 
-    // 6. 턴 종료 이벤트 (새로운 메서드 사용)
+    // 7. 턴 종료 이벤트 (새로운 메서드 사용)
     await this.emitTurnEndEvent();
 
-    // 7. 능력 쿨다운 업데이트
+    // 8. 능력 쿨다운 업데이트
     this.abilityManager.updateCooldowns();
 
     // 디버그 로그 추가
     console.log(`[턴 종료] ${turnNumber}턴이 종료됩니다.`);
 
+    // 🆕 9. 공개 로그 개입: BEFORE_LOG 이벤트로 공개 로그 필터링 허용
+    const finalLogs = await this.filterLogsWithEvent(logs, turnNumber);
+
     return {
       turnNumber,
       actions,
-      logs,
+      logs: finalLogs,
       players: this.gameState.players,
       isDeathZone
     };
+  }
+
+  // 🆕 입력 개입: BEFORE_INPUT / AFTER_INPUT 이벤트를 통해 능력이 입력에 개입
+  private async filterInputsWithEvents(actions: PlayerAction[], logs: string[]): Promise<PlayerAction[]> {
+    const filteredActions: PlayerAction[] = [];
+
+    for (const action of actions) {
+      // BEFORE_INPUT 이벤트 발생
+      const beforeInputEvent: ModifiableEvent<InputEvent> = {
+        type: GameEventType.BEFORE_INPUT,
+        timestamp: Date.now(),
+        data: {
+          action: { ...action },
+          playerId: action.playerId,
+          targetId: action.targetId
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(beforeInputEvent);
+
+      // 이벤트가 취소되면 해당 입력 제거
+      if (beforeInputEvent.cancelled) {
+        console.log(`[입력 개입] 플레이어 ${action.playerId}의 입력이 취소되었습니다.`);
+        logs.push(`플레이어 ${action.playerId}의 행동이 능력에 의해 차단되었습니다.`);
+        continue;
+      }
+
+      // 이벤트가 수정되었으면 수정된 액션 사용
+      const finalAction = beforeInputEvent.modified
+        ? beforeInputEvent.data.action
+        : action;
+
+      filteredActions.push(finalAction);
+
+      // AFTER_INPUT 이벤트 발생
+      const afterInputEvent: ModifiableEvent<InputEvent> = {
+        type: GameEventType.AFTER_INPUT,
+        timestamp: Date.now(),
+        data: {
+          action: finalAction,
+          playerId: finalAction.playerId,
+          targetId: finalAction.targetId
+        },
+        cancelled: false,
+        modified: false
+      };
+      await this.eventSystem.emit(afterInputEvent);
+    }
+
+    return filteredActions;
+  }
+
+  // 🆕 공개 로그 개입: BEFORE_LOG 이벤트를 통해 능력이 공개 로그에 개입
+  private async filterLogsWithEvent(logs: string[], turnNumber: number): Promise<string[]> {
+    const beforeLogEvent: ModifiableEvent<LogFilterEvent> = {
+      type: GameEventType.BEFORE_LOG,
+      timestamp: Date.now(),
+      data: {
+        logs: [...logs],
+        turn: turnNumber
+      },
+      cancelled: false,
+      modified: false
+    };
+    await this.eventSystem.emit(beforeLogEvent);
+
+    // 이벤트가 수정되었으면 수정된 로그 반환
+    return beforeLogEvent.modified
+      ? beforeLogEvent.data.logs
+      : logs;
   }
 
   private async processActions(actions: PlayerAction[], logs: string[]): Promise<void> {
@@ -544,7 +623,7 @@ export class TurnProcessor {
           break;
         case 'ABILITY':
             if (action.abilityId) {
-              await this.processAbility(player, action.abilityId, logs);
+              await this.processAbility(player, action, logs);
             } else {
               logs.push(`${player.name}의 능력 ID가 지정되지 않았습니다.`);
             }
@@ -774,31 +853,19 @@ export class TurnProcessor {
     logs.push(`${player.name}이(가) 행동을 패스했습니다.`);
   }
 
-  private async processAbility(player: Player, abilityInput: string, logs: string[]): Promise<void> {
-    console.log(`[능력 처리] ${player.name}이(가) 능력을 사용합니다: ${abilityInput}`);
+  private async processAbility(player: Player, action: PlayerAction, logs: string[]): Promise<void> {
+    const abilityId = action.abilityId!;
+    console.log(`[능력 처리] ${player.name}이(가) 능력을 사용합니다: ${abilityId}`);
 
-    // 능력 입력 파싱
-    const parsedActions = this.parseAbilityInput(abilityInput);
-    if (!parsedActions || parsedActions.length === 0) {
-      console.log(`[능력 처리] 능력 입력 파싱 실패: ${abilityInput}`);
-      logs.push(`${player.name}의 능력 사용이 실패했습니다. (잘못된 입력)`);
-      return;
-    }
+    // 대상 목록 구성 (기본 targetId + 추가 타겟)
+    const targets = [action.targetId, ...(action.additionalTargets || [])];
 
-    // 첫 번째 액션에서 능력 정보 추출
-    const firstAction = parsedActions[0];
-    if (!firstAction.abilityId) {
-      console.log(`[능력 처리] 능력 ID가 없습니다: ${abilityInput}`);
-      logs.push(`${player.name}의 능력 ID가 지정되지 않았습니다.`);
-      return;
-    }
-
-    // 능력 실행
+    // 능력 실행 (BEFORE_ABILITY_USE / AFTER_ABILITY_USE 이벤트는 AbilityManager에서 발생)
     try {
       const result = await this.abilityManager.executeAbility(
         player.id,
-        firstAction.abilityId,
-        [firstAction.targetId],
+        abilityId,
+        targets,
         {}
       );
 

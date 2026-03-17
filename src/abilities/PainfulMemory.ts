@@ -124,3 +124,5 @@ export class PainfulMemory extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('painfulMemory', () => new PainfulMemory(), ['잠식되는 고통의 기억']);

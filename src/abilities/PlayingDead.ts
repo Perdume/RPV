@@ -109,3 +109,5 @@ export class PlayingDead extends BaseAbility {
     this.setSession('deathTurn', 0);
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('playingDead', () => new PlayingDead(), ['죽은 척']);

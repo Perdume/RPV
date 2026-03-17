@@ -70,3 +70,5 @@ export class SuppressedFreedom extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('suppressedFreedom', () => new SuppressedFreedom(), ['억압된 자유']);

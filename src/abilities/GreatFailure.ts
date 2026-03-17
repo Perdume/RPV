@@ -100,3 +100,5 @@ export class GreatFailure extends BaseAbility {
     return (this.getSession('current_turn') as number) || 0;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('greatFailure', () => new GreatFailure(), ['대실패']);

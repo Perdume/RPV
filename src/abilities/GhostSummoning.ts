@@ -158,3 +158,5 @@ export class GhostSummoning extends BaseAbility {
     };
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('ghostSummoning', () => new GhostSummoning(), ['원귀 강령']);

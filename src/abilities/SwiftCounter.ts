@@ -88,3 +88,5 @@ export class SwiftCounter extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('swiftCounter', () => new SwiftCounter(), ['날렵한 반격']);

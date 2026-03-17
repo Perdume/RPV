@@ -152,3 +152,5 @@ export class Confusion extends BaseAbility {
     return this.actionCount.get(actionType) || 0;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('confusion', () => new Confusion(), ['혼선']);

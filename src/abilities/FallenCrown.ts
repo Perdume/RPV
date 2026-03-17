@@ -174,3 +174,5 @@ export class FallenCrown extends BaseAbility {
     return this.deathSubstitutions;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('fallenCrown', () => new FallenCrown(), ['무너져내린 왕관']);

@@ -90,3 +90,5 @@ export class DiscordDissonance extends BaseAbility {
     console.log(`[불협화음] 공격자 타겟 리다이렉트 실행`);
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('discordDissonance', () => new DiscordDissonance(), ['불협화음']);

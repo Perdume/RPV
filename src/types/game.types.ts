@@ -196,7 +196,14 @@ export enum GameEventType {
   AFTER_HEAL = 'AFTER_HEAL',
   STATUS_EFFECT_APPLIED = 'STATUS_EFFECT_APPLIED',
   STATUS_EFFECT_REMOVED = 'STATUS_EFFECT_REMOVED',
-  ABILITY_CHAIN_TRIGGERED = 'ABILITY_CHAIN_TRIGGERED'
+  ABILITY_CHAIN_TRIGGERED = 'ABILITY_CHAIN_TRIGGERED',
+
+  // 🆕 이벤트 개입 지점 (입력 / 능력처리 / 공개로그)
+  BEFORE_INPUT = 'BEFORE_INPUT',        // 플레이어 입력이 처리되기 전
+  AFTER_INPUT = 'AFTER_INPUT',          // 플레이어 입력이 처리된 후
+  BEFORE_ABILITY_USE = 'BEFORE_ABILITY_USE', // 능력 실행 직전
+  AFTER_ABILITY_USE = 'AFTER_ABILITY_USE',   // 능력 실행 직후
+  BEFORE_LOG = 'BEFORE_LOG'             // 공개 로그가 확정되기 전
 }
 
 export interface Ability {
@@ -232,6 +239,13 @@ export interface Ability {
   onStatusEffectApplied?(event: ModifiableEvent): Promise<void>;
   onStatusEffectRemoved?(event: ModifiableEvent): Promise<void>;
   onAnyEvent?(event: ModifiableEvent): Promise<void>; // 모든 이벤트 감지
+
+  // 🆕 이벤트 개입 지점 훅들
+  onBeforeInput?(event: ModifiableEvent): Promise<void>;   // 입력 처리 전 개입
+  onAfterInput?(event: ModifiableEvent): Promise<void>;    // 입력 처리 후 개입
+  onBeforeAbilityUse?(event: ModifiableEvent): Promise<void>; // 능력 실행 전 개입
+  onAfterAbilityUse?(event: ModifiableEvent): Promise<void>;  // 능력 실행 후 개입
+  onBeforeLog?(event: ModifiableEvent): Promise<void>;     // 공개 로그 확정 전 개입
 }
 
 export interface AbilityContext {
@@ -367,6 +381,38 @@ export interface AbilityChainEvent {
   triggerAbility: string;
 }
 
+// 🆕 입력 개입 이벤트 데이터
+export interface InputEvent {
+  action: PlayerAction;
+  playerId: number;
+  targetId: number;
+}
+
+// 🆕 능력처리 개입 이벤트 데이터
+export interface AbilityUseStartEvent {
+  playerId: number;
+  abilityId: string;
+  targets: number[];
+  parameters: Record<string, any>;
+}
+
+export interface AbilityUseEndEvent {
+  playerId: number;
+  abilityId: string;
+  success: boolean;
+  message: string;
+  damage?: number;
+  heal?: number;
+  death?: boolean;
+  target?: number;
+}
+
+// 🆕 공개 로그 개입 이벤트 데이터
+export interface LogFilterEvent {
+  logs: string[];
+  turn: number;
+}
+
 // 🆕 추가 이벤트 타입들
 export interface FocusAttackEvent {
   attacker: number;
@@ -420,6 +466,12 @@ export type EventDataMap = {
   [GameEventType.STATUS_CHANGE]: StatusChangeEvent;
   [GameEventType.ABILITY_USE]: AbilityUseEvent;
   [GameEventType.ABILITY_EFFECT]: AbilityEffectEvent;
+  // 🆕 새로운 이벤트 개입 지점 타입
+  [GameEventType.BEFORE_INPUT]: InputEvent;
+  [GameEventType.AFTER_INPUT]: InputEvent;
+  [GameEventType.BEFORE_ABILITY_USE]: AbilityUseStartEvent;
+  [GameEventType.AFTER_ABILITY_USE]: AbilityUseEndEvent;
+  [GameEventType.BEFORE_LOG]: LogFilterEvent;
 }
 
 // 🆕 타입 안전한 ModifiableEvent

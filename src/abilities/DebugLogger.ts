@@ -66,3 +66,5 @@ export class DebugLogger extends BaseAbility {
     console.log('[DebugLogger] Focus Attack:', event.data);
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('debug_logger', () => new DebugLogger());

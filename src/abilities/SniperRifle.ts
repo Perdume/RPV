@@ -93,3 +93,5 @@ export class SniperRifle extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('sniperRifle', () => new SniperRifle(), ['HS.50 대물 저격소총']);

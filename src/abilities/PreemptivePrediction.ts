@@ -110,3 +110,5 @@ export class PreemptivePrediction extends BaseAbility {
     console.log(`[선제 예측] ${playerId}의 능력 ${duration}턴 봉인`);
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('preemptivePrediction', () => new PreemptivePrediction(), ['선제 예측']);

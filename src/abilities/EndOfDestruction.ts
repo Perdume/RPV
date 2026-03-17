@@ -68,3 +68,5 @@ export class EndOfDestruction extends BaseAbility {
     return this.getTurn('heal_amount', currentTurn) || 0;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('endOfDestruction', () => new EndOfDestruction(), ['끝의 파멸']);
