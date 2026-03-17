@@ -72,3 +72,5 @@ export class BurningEmbers extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('burningEmbers', () => new BurningEmbers());

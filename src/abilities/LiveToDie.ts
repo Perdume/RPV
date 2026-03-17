@@ -114,3 +114,5 @@ export class LiveToDie extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('liveToDie', () => new LiveToDie(), ['살고자 하면 죽고']);

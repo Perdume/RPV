@@ -83,3 +83,5 @@ export class ShadowInDarkness extends BaseAbility {
     return (this.getSession('current_turn') as number) || 0;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('shadowInDarkness', () => new ShadowInDarkness(), ['어둠 속 그림자']);

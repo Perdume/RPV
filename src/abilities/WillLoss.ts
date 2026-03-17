@@ -54,3 +54,5 @@ export class WillLoss extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('willLoss', () => new WillLoss(), ['전의 상실']);

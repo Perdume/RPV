@@ -78,3 +78,5 @@ export class FateExchange extends BaseAbility {
     console.log(`[운명 교차] 플레이어 ${playerId}의 운명 교차가 활성화되었습니다.`);
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('fateExchange', () => new FateExchange());

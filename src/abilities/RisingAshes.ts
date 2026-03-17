@@ -89,3 +89,5 @@ export class RisingAshes extends BaseAbility {
     };
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('risingAshes', () => new RisingAshes());

@@ -86,3 +86,5 @@ export class WoundAnalysis extends BaseAbility {
     return (this.getSession('current_turn') as number) || 0;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('woundAnalysis', () => new WoundAnalysis(), ['상처 파악']);

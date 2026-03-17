@@ -174,3 +174,5 @@ export class Judge extends BaseAbility {
     return playerId === this.ownerId;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('judge', () => new Judge(), ['심판자']);

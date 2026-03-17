@@ -392,6 +392,71 @@ describe('Numbers Game Integration Tests - 개선판', () => {
   });
 });
 
+describe('AbilityRegistry 자동 등록 테스트', () => {
+  it('AbilityRegistry에 모든 게임 능력이 등록되어 있음', () => {
+    const { AbilityRegistry } = require('../abilities/AbilityRegistry');
+
+    const expectedIds = [
+      'multipleStrike', 'sniperRifle', 'quantumization', 'swiftCounter',
+      'alzheimer', 'judge', 'synchronize', 'ghostSummoning',
+      'confusion', 'weaponBreak', 'preemptivePrediction', 'discordDissonance',
+      'endOfDestruction', 'greatFailure', 'liveToDie', 'painfulMemory',
+      'shadowInDarkness', 'woundAnalysis', 'targetManipulation', 'suppressedFreedom',
+      'unseeable', 'willLoss', 'fallenCrown', 'fateCross',
+      'burningEmbers', 'annihilation', 'playingDead', 'fateExchange',
+      'risingAshes',
+    ];
+
+    const registeredIds = AbilityRegistry.getIds();
+    for (const id of expectedIds) {
+      expect(registeredIds).toContain(id);
+    }
+  });
+
+  it('AbilityRegistry 한글 별칭으로 정식 ID를 조회할 수 있음', () => {
+    const { AbilityRegistry } = require('../abilities/AbilityRegistry');
+
+    expect(AbilityRegistry.resolveAlias('다중 타격')).toBe('multipleStrike');
+    expect(AbilityRegistry.resolveAlias('알츠하이머')).toBe('alzheimer');
+    expect(AbilityRegistry.resolveAlias('심판자')).toBe('judge');
+    expect(AbilityRegistry.resolveAlias('동기화')).toBe('synchronize');
+    expect(AbilityRegistry.resolveAlias('원귀 강령')).toBe('ghostSummoning');
+    expect(AbilityRegistry.resolveAlias('날렵한 반격')).toBe('swiftCounter');
+    // 이미 정식 ID면 그대로 반환
+    expect(AbilityRegistry.resolveAlias('multipleStrike')).toBe('multipleStrike');
+    // 등록되지 않은 값은 그대로 반환
+    expect(AbilityRegistry.resolveAlias('unknownAbility')).toBe('unknownAbility');
+  });
+
+  it('AbilityRegistry.createAll()이 모든 능력 인스턴스를 생성함', () => {
+    const { AbilityRegistry } = require('../abilities/AbilityRegistry');
+
+    const all = AbilityRegistry.createAll();
+    expect(all.size).toBeGreaterThanOrEqual(29); // 29개 게임 능력 이상
+    expect(all.has('multipleStrike')).toBe(true);
+    expect(all.has('alzheimer')).toBe(true);
+    expect(all.has('risingAshes')).toBe(true);
+  });
+
+  it('AbilityManager가 레지스트리 기반으로 한글 별칭 능력을 할당할 수 있음', () => {
+    const { AbilityManager } = require('../abilities/AbilityManager');
+    const { EventSystem } = require('../utils/eventSystem');
+
+    const es = new EventSystem();
+    const am = new AbilityManager(es);
+
+    am.setGameState({ players: [{ id: 1, name: '테스트' } as any] });
+    // 한글 별칭으로 할당
+    am.assignAbility(1, '다중 타격');
+    const ability = am.getPlayerAbility(1);
+    expect(ability).toBeDefined();
+    expect(ability!.id).toBe('multipleStrike');
+
+    am.dispose();
+    es.dispose();
+  });
+});
+
 // 개선된 헬퍼 함수들
 function createRealisticGameState(): GameState {
   return {

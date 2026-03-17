@@ -124,3 +124,5 @@ export class Unseeable extends BaseAbility {
     return null; // 실제 구현에서는 의존성 주입으로 해결
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('unseeable', () => new Unseeable(), ['직시 불가']);

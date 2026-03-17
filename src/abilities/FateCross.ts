@@ -110,3 +110,5 @@ export class FateCross extends BaseAbility {
     return this.hasBeenUsed;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('fateCross', () => new FateCross());

@@ -118,3 +118,5 @@ export class Annihilation extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('annihilation', () => new Annihilation(), ['소멸']);

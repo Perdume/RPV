@@ -61,3 +61,5 @@ export class MultipleStrike extends BaseAbility {
     }
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('multipleStrike', () => new MultipleStrike(), ['다중 타격']);

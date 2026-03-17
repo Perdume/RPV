@@ -57,3 +57,5 @@ export class Quantumization extends BaseAbility {
     return this.isActive && this.maxUses > 0;
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('quantumization', () => new Quantumization(), ['양자화']);

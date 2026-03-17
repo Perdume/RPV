@@ -144,3 +144,5 @@ export class Alzheimer extends BaseAbility {
     return this.statusHiddenPlayers.has(playerId);
   }
 } 
+import { AbilityRegistry } from './AbilityRegistry';
+AbilityRegistry.register('alzheimer', () => new Alzheimer(), ['알츠하이머']);
