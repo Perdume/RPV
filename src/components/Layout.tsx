@@ -72,6 +72,7 @@ interface LayoutProps {
   children?: React.ReactNode;
   players?: Player[];
   gameData?: HeaderGameData | null;
+  currentTurn?: number;
   onTurnComplete?: (actions: PlayerAction[]) => void;
 }
 
@@ -79,6 +80,7 @@ export const Layout: React.FC<LayoutProps> = ({
   children, 
   players = [], 
   gameData = null,
+  currentTurn,
   onTurnComplete = () => {} 
 }) => {
   return (
@@ -86,7 +88,7 @@ export const Layout: React.FC<LayoutProps> = ({
       <Header>
         <Title>🎮 Numbers Game Master Console</Title>
         <GameInfo>
-          <span>턴: {gameData?.turn ?? 0}</span>
+          <span>턴: {currentTurn ?? gameData?.turn ?? 0}</span>
           <span>참가: {players.length}명</span>
           <span>생존: {players.filter(p => p.status === PlayerStatus.ALIVE).length}명</span>
           <span>부상: {players.filter(p => p.status === PlayerStatus.WOUNDED).length}명</span>
@@ -105,6 +107,7 @@ export const Layout: React.FC<LayoutProps> = ({
           />
         </TurnControlSection>
       </MainContent>
+      {children}
     </Container>
   );
 }; 

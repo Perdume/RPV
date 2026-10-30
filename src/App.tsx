@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { theme } from './styles/theme';
-import { PlayerTable } from './components/PlayerTable';
 import { ActionInput } from './components/ActionInput';
 import { Player, PlayerAction, PlayerStatus, GameState, TurnResult } from './types/game.types';
 import { Layout } from './components/Layout';
 import { GlobalStyle } from './styles/GlobalStyle';
 import { TurnProcessor } from './utils/turnProcessor';
-import { TurnControl } from './components/TurnControl';
 import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
 import { StatusEffectManager } from './utils/StatusEffectManager';
@@ -42,20 +40,7 @@ interface GameData {
   }[];
 }
 
-const Container = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: ${theme.spacing.lg};
-`;
-
-const Title = styled.h1`
-  color: ${theme.colors.text.primary};
-  font-family: ${theme.fonts.mono};
-  margin-bottom: ${theme.spacing.lg};
-`;
-
 const LogContainer = styled.div`
-  margin-top: ${theme.spacing.lg};
   padding: ${theme.spacing.md};
   background: ${theme.colors.background.secondary};
   border-radius: ${theme.borderRadius.md};
@@ -81,6 +66,7 @@ const App: React.FC = () => {
   const eventSystemRef = useRef<EventSystem | null>(null);
   const abilityManagerRef = useRef<AbilityManager | null>(null);
   const turnProcessorRef = useRef<TurnProcessor | null>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   // EventSystem 생성 시 StatusEffectManager도 함께 연결 (렌더링마다 반복하지 않음)
   if (!eventSystemRef.current) {
@@ -100,6 +86,14 @@ const App: React.FC = () => {
   useEffect(() => {
     initFileSystem();
   }, []);
+
+  // 새 턴 로그가 추가되면 로그 창을 맨 아래로 스크롤
+  useEffect(() => {
+    const container = logContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [logs]);
 
   useEffect(() => {
     const loadGameData = async () => {
@@ -214,32 +208,30 @@ const App: React.FC = () => {
   return (
     <>
       <GlobalStyle />
+      {/* 플레이어 표와 TurnControl은 Layout이 렌더링하므로 나머지만 children으로 전달 */}
       <Layout 
         players={players}
         gameData={gameData}
+        currentTurn={currentTurn}
         onTurnComplete={handleActionSubmit}
       >
-        <Container>
-          <Title>Numbers Game</Title>
-          <PlayerTable players={players} />
-          <ActionInput 
-            players={players} 
-            onTurnComplete={handleActionSubmit}
-          />
-          <TurnControl
-            players={players}
-            onTurnComplete={handleActionSubmit}
-          />
-          
-          {/* 실행 위치 정보 표시 */}
-          <ElectronPathDisplay />
-          
-          <LogContainer>
-            {logs.map((log, index) => (
+        <LogContainer ref={logContainerRef}>
+          {logs.length > 0 ? (
+            logs.map((log, index) => (
               <LogEntry key={index}>{log}</LogEntry>
-            ))}
-          </LogContainer>
-        </Container>
+            ))
+          ) : (
+            <LogEntry>턴 로그가 여기에 표시됩니다.</LogEntry>
+          )}
+        </LogContainer>
+
+        <ActionInput 
+          players={players} 
+          onTurnComplete={handleActionSubmit}
+        />
+        
+        {/* 실행 위치 정보 표시 */}
+        <ElectronPathDisplay />
       </Layout>
       
       {/* 개발용 테스트 버튼들 */}

@@ -195,37 +195,50 @@ export class StatusEffectManager {
     }
   }
 
+  // 턴 종료 효과 실행 후 지속시간을 1 감소시키고, 만료된 상태이상을 제거
   public processTurnEnd(currentTurn: number): void {
     this.currentTurn = currentTurn;
-    
+
     for (const [playerId, effects] of this.effects.entries()) {
-      const remainingEffects: StatusEffect[] = [];
-      
-      effects.forEach(effect => {
+      const expiredEffects: StatusEffect[] = [];
+
+      // 턴 종료 효과가 상태이상을 제거할 수 있으므로 복사본을 순회
+      for (const effect of [...effects]) {
         // 턴 종료 효과 실행
         if (effect.onTurnEnd) {
           effect.onTurnEnd(playerId, effect.stacks);
         }
-        
-        // 지속시간 감소
+
+        // 턴 종료 효과로 이미 제거된 경우 (예: 균열 3중첩)
+        if (!this.getPlayerStatusEffects(playerId).includes(effect)) {
+          continue;
+        }
+
+        // 지속시간 감소 (-1은 영구 효과)
+        if (effect.duration === -1) continue;
         if (effect.duration > 0) {
           effect.duration--;
-          if (effect.duration > 0) {
-            remainingEffects.push(effect);
-          } else {
-            // 제거 시 효과
-            if (effect.onRemove) {
-              effect.onRemove(playerId, effect.stacks);
-            }
-            console.log(`[상태이상] ${playerId}의 ${effect.name} 지속시간 종료`);
-          }
-        } else if (effect.duration === -1) {
-          // 영구 효과
-          remainingEffects.push(effect);
         }
-      });
-      
-      this.effects.set(playerId, remainingEffects);
+        if (effect.duration <= 0) {
+          expiredEffects.push(effect);
+        }
+      }
+
+      if (expiredEffects.length === 0) continue;
+
+      this.effects.set(
+        playerId,
+        this.getPlayerStatusEffects(playerId).filter(effect => !expiredEffects.includes(effect))
+      );
+
+      for (const effect of expiredEffects) {
+        // 제거 시 효과
+        if (effect.onRemove) {
+          effect.onRemove(playerId, effect.stacks);
+        }
+        console.log(`[상태이상] ${playerId}의 ${effect.name} 지속시간 종료`);
+        this.emitStatusEffectRemoved(playerId, effect);
+      }
     }
   }
 
@@ -394,29 +407,5 @@ export class StatusEffectManager {
     }
     
     return { totalEffects, playersWithEffects };
-  }
-
-  // 🆕 턴 효과 업데이트 (duration 감소)
-  updateTurnEffects(currentTurn: number): void {
-    for (const [playerId, effects] of this.effects.entries()) {
-      const updatedEffects: StatusEffect[] = [];
-      
-      for (const effect of effects) {
-        if (effect.duration > 0) {
-          effect.duration--;
-          if (effect.duration > 0) {
-            updatedEffects.push(effect);
-          } else {
-            // duration이 0이 되면 제거 이벤트 발생
-            this.emitStatusEffectRemoved(playerId, effect);
-          }
-        } else if (effect.duration === -1) {
-          // 영구 효과는 유지
-          updatedEffects.push(effect);
-        }
-      }
-      
-      this.effects.set(playerId, updatedEffects);
-    }
   }
 } 

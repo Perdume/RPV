@@ -1,5 +1,5 @@
 import { BaseAbility } from './BaseAbility';
-import { ModifiableEvent } from '../types/game.types';
+import { ModifiableEvent, TypedModifiableEvent } from '../types/game.types';
 import { schemas } from '../types/game.types';
 
 export class Debug extends BaseAbility {
@@ -7,7 +7,7 @@ export class Debug extends BaseAbility {
     super('디버그로거', '디버그 로거', '디버그 로그를 출력합니다.', 0, 0);
   }
 
-  async onBeforeAttack(event: ModifiableEvent): Promise<void> {
+  async onBeforeAttack(event: TypedModifiableEvent): Promise<void> {
     const owner = this.getOwner();
     console.log(`[DEBUG ABILITY] === Debug onBeforeAttack 시작 ===`);
     console.log(`[DEBUG ABILITY] Owner: ${owner}, 공격자: ${event.data.attacker}`);
@@ -108,7 +108,7 @@ export class Debug extends BaseAbility {
 
   }
 
-  async onTurnEnd(event: ModifiableEvent): Promise<void> {
+  async onTurnEnd(event: TypedModifiableEvent): Promise<void> {
     const owner = this.getOwner();
     if (!owner) return;
 

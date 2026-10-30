@@ -184,7 +184,7 @@ export class TurnProcessor {
   // 🆕 턴 종료 효과 처리
   private async processTurnEndEffects(): Promise<void> {
     try {
-      // 🆕 상태이상 턴 종료 처리 추가
+      // 상태이상 턴 종료 처리 (지속시간 감소와 만료 제거 포함)
       this.statusEffectManager.processTurnEnd(this.gameState.currentTurn);
 
       // 상태이상 턴 종료 효과 처리
@@ -194,10 +194,6 @@ export class TurnProcessor {
           await this.applyStatusEffectTurnEnd(player, effect);
         }
       }
-
-      // 상태이상 duration 감소
-      this.statusEffectManager.updateTurnEffects(this.gameState.currentTurn);
-
     } catch (error) {
       this.handleError('턴 종료 효과 처리', error);
     }

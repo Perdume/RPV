@@ -9,7 +9,6 @@ interface ActionInputProps {
 }
 
 const Container = styled.div`
-  margin-top: ${theme.spacing.lg};
   padding: ${theme.spacing.md};
   background: ${theme.colors.background.card};
   border-radius: ${theme.borderRadius.md};
