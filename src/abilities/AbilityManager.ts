@@ -63,11 +63,32 @@ const EVENT_HANDLER_MAP: Partial<Record<GameEventType, AbilityEventHandler>> = {
 // setupEventHandlers에서 등록할 이벤트 타입 목록
 const HANDLED_EVENT_TYPES = Object.keys(EVENT_HANDLER_MAP) as GameEventType[];
 
+// 능력 ID 매핑 테이블 (실제 존재하는 능력들만)
+const ABILITY_ID_MAP: { [key: string]: string } = {
+  'multipleStrike': 'multipleStrike',
+  '다중 타격': 'multipleStrike',
+  'sniperRifle': 'sniperRifle',
+  'HS.50 대물 저격소총': 'sniperRifle',
+  'quantumization': 'quantumization',
+  '양자화': 'quantumization',
+  'swiftCounter': 'swiftCounter',
+  '날렵한 반격': 'swiftCounter',
+  'alzheimer': 'alzheimer',
+  '알츠하이머': 'alzheimer',
+  'judge': 'judge',
+  '심판자': 'judge',
+  'synchronize': 'synchronize',
+  '동기화': 'synchronize',
+  'ghostSummoning': 'ghostSummoning',
+  '원귀 강령': 'ghostSummoning'
+};
+
 export class AbilityManager {
   private static instance: AbilityManager | null = null; // 🔧 추가: singleton 인스턴스
   
   private abilities: Map<string, Ability> = new Map();
   private playerAbilities: Map<number, BaseAbility> = new Map();
+  private sortedAbilitiesCache: BaseAbility[] | null = null; // 우선순위 정렬 캐시 (능력 할당 시 무효화)
   private gameState: { players: Player[] } | null = null;
   private eventSystem!: EventSystem; // 🔧 수정: definite assignment assertion
   private logs: string[] = [];
@@ -121,6 +142,7 @@ export class AbilityManager {
     
     // 데이터 정리
     this.playerAbilities.clear();
+    this.sortedAbilitiesCache = null;
     this.gameState = null;
     this.disabledAbilities.clear();
     this.abilities.clear();
@@ -218,8 +240,7 @@ export class AbilityManager {
         this.currentTurn = data.turn;
       }
 
-      const abilities = Array.from(this.playerAbilities.values());
-      await this.executeWithPriority(abilities, event);
+      await this.executeWithPriority(event);
     };
   }
 
@@ -236,31 +257,13 @@ export class AbilityManager {
       (ability as BaseAbility).setOwner(playerId);
       (ability as BaseAbility).setAbilityManager(this as any);
       this.playerAbilities.set(playerId, ability as BaseAbility);
+      this.sortedAbilitiesCache = null;
       console.log(`[ABILITY] Owner 설정 완료: Player ${playerId} -> ${mappedAbilityId}`);
     }
   }
 
   private mapAbilityId(abilityId: string): string {
-    // 능력 ID 매핑 테이블 (실제 존재하는 능력들만)
-    const idMap: { [key: string]: string } = {
-      'multipleStrike': 'multipleStrike',
-      '다중 타격': 'multipleStrike',
-      'sniperRifle': 'sniperRifle',
-      'HS.50 대물 저격소총': 'sniperRifle',
-      'quantumization': 'quantumization',
-      '양자화': 'quantumization',
-      'swiftCounter': 'swiftCounter',
-      '날렵한 반격': 'swiftCounter',
-      'alzheimer': 'alzheimer',
-      '알츠하이머': 'alzheimer',
-      'judge': 'judge',
-      '심판자': 'judge',
-      'synchronize': 'synchronize',
-      '동기화': 'synchronize',
-      'ghostSummoning': 'ghostSummoning',
-      '원귀 강령': 'ghostSummoning'
-    };
-    return idMap[abilityId] || abilityId;
+    return ABILITY_ID_MAP[abilityId] || abilityId;
   }
 
   private findPlayer(playerId: number): Player | undefined {
@@ -285,14 +288,27 @@ export class AbilityManager {
     };
   }
 
+  // 우선순위 내림차순으로 정렬된 할당 능력 목록 (할당이 바뀔 때만 다시 정렬)
+  private getAbilitiesByPriority(): BaseAbility[] {
+    if (!this.sortedAbilitiesCache) {
+      this.sortedAbilitiesCache = Array.from(this.playerAbilities.values())
+        .sort((a, b) => b.priority - a.priority);
+    }
+    return this.sortedAbilitiesCache;
+  }
+
   // 🆕 우선순위 기반 실행 시스템
-  private async executeWithPriority(abilities: BaseAbility[], event: ModifiableEvent): Promise<void> {
-    // 우선순위별로 정렬
-    const sortedAbilities = abilities
-      .filter(ability => !this.disabledAbilities.has(ability.id))
-      .sort((a, b) => b.priority - a.priority);
+  private async executeWithPriority(event: ModifiableEvent): Promise<void> {
+    const handlerName = EVENT_HANDLER_MAP[event.type];
+    if (!handlerName) return;
+
+    // 비활성화된 능력과 이 이벤트 핸들러를 재정의하지 않은(기본 no-op) 능력은 건너뜀
+    const defaultHandler = BaseAbility.prototype[handlerName];
+    const targetAbilities = this.getAbilitiesByPriority().filter(ability =>
+      !this.disabledAbilities.has(ability.id) && ability[handlerName] !== defaultHandler
+    );
     
-    for (const ability of sortedAbilities) {
+    for (const ability of targetAbilities) {
       try {
         const startTime = performance.now();
         await this.safeExecuteAbility(ability, event);

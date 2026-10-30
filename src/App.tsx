@@ -82,25 +82,15 @@ const App: React.FC = () => {
   const abilityManagerRef = useRef<AbilityManager | null>(null);
   const turnProcessorRef = useRef<TurnProcessor | null>(null);
 
-  // EventSystem 초기화
+  // EventSystem 생성 시 StatusEffectManager도 함께 연결 (렌더링마다 반복하지 않음)
   if (!eventSystemRef.current) {
-    console.log('[APP] EventSystem 생성 중...');
     eventSystemRef.current = new EventSystem();
-    console.log('[APP] EventSystem 생성 완료');
-  }
-
-  // StatusEffectManager 초기화 (EventSystem이 준비된 후)
-  if (eventSystemRef.current) {
-    console.log('[APP] StatusEffectManager 초기화 중...');
     StatusEffectManager.initializeWithEventSystem(eventSystemRef.current);
-    console.log('[APP] StatusEffectManager 초기화 완료');
   }
 
   // AbilityManager 초기화 (EventSystem과 StatusEffectManager가 준비된 후)
-  if (!abilityManagerRef.current && eventSystemRef.current) {
-    console.log('[APP] AbilityManager 생성 중...');
+  if (!abilityManagerRef.current) {
     abilityManagerRef.current = new AbilityManager(eventSystemRef.current);
-    console.log('[APP] AbilityManager 생성 완료');
   }
 
   const abilityManager = abilityManagerRef.current;
@@ -226,6 +216,7 @@ const App: React.FC = () => {
       <GlobalStyle />
       <Layout 
         players={players}
+        gameData={gameData}
         onTurnComplete={handleActionSubmit}
       >
         <Container>

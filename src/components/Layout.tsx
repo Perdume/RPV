@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import styled from 'styled-components';
 import { theme } from '../styles/theme';
 import { PlayerTable } from './PlayerTable';
@@ -59,44 +59,28 @@ const TurnControlSection = styled.section`
   min-width: 0;
 `;
 
-interface GameData {
+// 헤더에 표시할 게임 정보 (App에서 불러온 data.json을 그대로 전달받음)
+interface HeaderGameData {
   turn: number;
-  survivors: number;
   deathZone: {
     stage: number;
-    maxHpReduction: number;
     nextReduction: number;
   };
-  players: Player[];
 }
 
 interface LayoutProps {
   children?: React.ReactNode;
   players?: Player[];
+  gameData?: HeaderGameData | null;
   onTurnComplete?: (actions: PlayerAction[]) => void;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ 
   children, 
   players = [], 
+  gameData = null,
   onTurnComplete = () => {} 
 }) => {
-  const [gameData, setGameData] = useState<GameData | null>(null);
-
-  useEffect(() => {
-    const fetchGameData = async () => {
-      try {
-        const response = await fetch('/Data/data.json');
-        const data = await response.json();
-        setGameData(data);
-      } catch (error) {
-        console.error('게임 데이터 로드 실패:', error);
-      }
-    };
-
-    fetchGameData();
-  }, []);
-
   return (
     <Container>
       <Header>
