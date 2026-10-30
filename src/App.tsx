@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { theme } from './styles/theme';
 import { ActionInput } from './components/ActionInput';
+import { EarlyProtectionPanel } from './components/EarlyProtectionPanel';
 import { Player, PlayerAction, PlayerStatus, GameState, TurnResult } from './types/game.types';
 import { Layout } from './components/Layout';
 import { GlobalStyle } from './styles/GlobalStyle';
-import { TurnProcessor } from './utils/turnProcessor';
+import { TurnProcessor, EarlyProtectionChoice } from './utils/turnProcessor';
 import { EventSystem } from './utils/eventSystem';
 import { AbilityManager } from './abilities/AbilityManager';
 import { StatusEffectManager } from './utils/StatusEffectManager';
@@ -36,7 +37,7 @@ interface GameData {
     status: string;
     statusEffects: string[];
     pendingDefenseHeal: number;
-    maxAbilityUses: number;
+    maxAbilityUses?: number;
   }[];
 }
 
@@ -57,10 +58,10 @@ const LogEntry = styled.div`
 
 const App: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [gameData, setGameData] = useState<GameData | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
-  const [currentTurn, setCurrentTurn] = useState(1);
+  const [currentTurn, setCurrentTurn] = useState(1); // 이번에 진행할 턴
   const [isDeathZone, setIsDeathZone] = useState(false);
+  const [earlyProtectionIds, setEarlyProtectionIds] = useState<number[]>([]);
   
   // EventSystem과 AbilityManager를 useRef로 관리하여 중복 생성 방지
   const eventSystemRef = useRef<EventSystem | null>(null);
@@ -104,7 +105,6 @@ const App: React.FC = () => {
         }
         const data: GameData = await response.json();
         
-        setGameData(data);
         setCurrentTurn(data.turn);
         const newPlayers = data.players.map(p => ({
           id: p.id,
@@ -114,7 +114,7 @@ const App: React.FC = () => {
           defenseGauge: p.defenseGauge,
           maxDefenseGauge: p.maxDefenseGauge,
           evadeCount: p.evadeCount,
-          abilityId: p.ability.toLowerCase().replace(/\s+/g, ''),
+          abilityId: '',
           status: p.status.toUpperCase() as PlayerStatus,
           statusEffects: [],
           isPerfectGuard: false,
@@ -124,7 +124,7 @@ const App: React.FC = () => {
           attack: p.attack,
           ability: p.ability,
           abilityUses: p.abilityUses,
-          maxAbilityUses: p.maxAbilityUses,
+          maxAbilityUses: p.maxAbilityUses ?? p.abilityUses,
           pendingDefenseHeal: p.pendingDefenseHeal,
           hasDefended: false,
           wasAttacked: false,
@@ -141,11 +141,9 @@ const App: React.FC = () => {
           customFlags: new Map<string, any>()
         }));
 
-        // 능력 등록
+        // 능력 등록 (data.json의 능력 이름으로 찾음, 없으면 능력 없음)
         newPlayers.forEach(player => {
-          if (player.abilityId && abilityManager) {
-            abilityManager.assignAbility(player.id, player.abilityId);
-          }
+          player.abilityId = abilityManager?.assignAbility(player.id, player.ability) ?? '';
         });
 
         setPlayers(newPlayers);
@@ -171,21 +169,38 @@ const App: React.FC = () => {
       `${p.name}: HP ${p.hp}/${p.maxHp}, 방어 ${p.defenseGauge}/${p.maxDefenseGauge}, 회피 ${p.evadeCount}`
     ));
     
-    setPlayers(result.players);
+    setPlayers([...result.players]);
     setLogs(prev => [...prev, ...result.logs]);
-    setCurrentTurn(result.turnNumber);
+    setCurrentTurn(result.turnNumber + 1);
     setIsDeathZone(result.isDeathZone);
+    setEarlyProtectionIds(prev => Array.from(new Set([...prev, ...(result.earlyProtectionCandidates ?? [])])));
+  };
+
+  const handleEarlyProtectionChoice = (playerId: number, choice: EarlyProtectionChoice) => {
+    const turnProcessor = turnProcessorRef.current;
+    if (!turnProcessor) return;
+
+    try {
+      const message = turnProcessor.applyEarlyProtection(playerId, choice);
+      setLogs(prev => [...prev, message]);
+      setPlayers(prev => [...prev]);
+      setEarlyProtectionIds(prev => prev.filter(id => id !== playerId));
+    } catch (error) {
+      console.error('초반 보호 적용 실패:', error);
+      setLogs(prev => [...prev, `[초반 보호] 적용 실패: ${error instanceof Error ? error.message : error}`]);
+    }
   };
 
   const handleActionSubmit = async (actions: PlayerAction[]) => {
     console.log('[DEBUG] 입력된 행동:', actions);
 
+    // TurnProcessor의 currentTurn은 이미 끝난 턴 수
     const gameState: GameState = {
       players,
-      currentTurn,
+      currentTurn: currentTurn - 1,
       logs,
       isDeathZone,
-      turn: currentTurn,
+      turn: currentTurn - 1,
       survivors: players.filter(p => p.status !== PlayerStatus.DEAD),
       deathZone: isDeathZone,
       currentSession: 'game-session',
@@ -208,12 +223,23 @@ const App: React.FC = () => {
   return (
     <>
       <GlobalStyle />
-      {/* 플레이어 표와 TurnControl은 Layout이 렌더링하므로 나머지만 children으로 전달 */}
       <Layout 
         players={players}
-        gameData={gameData}
         currentTurn={currentTurn}
-        onTurnComplete={handleActionSubmit}
+        controls={
+          <>
+            <EarlyProtectionPanel
+              candidates={players.filter(p => earlyProtectionIds.includes(p.id))}
+              abilityOptions={turnProcessorRef.current?.getEarlyProtectionAbilityOptions() ?? []}
+              onChoose={handleEarlyProtectionChoice}
+            />
+            <ActionInput
+              players={players}
+              currentTurn={currentTurn}
+              onTurnComplete={handleActionSubmit}
+            />
+          </>
+        }
       >
         <LogContainer ref={logContainerRef}>
           {logs.length > 0 ? (
@@ -225,11 +251,6 @@ const App: React.FC = () => {
           )}
         </LogContainer>
 
-        <ActionInput 
-          players={players} 
-          onTurnComplete={handleActionSubmit}
-        />
-        
         {/* 실행 위치 정보 표시 */}
         <ElectronPathDisplay />
       </Layout>

@@ -2,6 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 import { theme } from '../styles/theme';
 import { Player, PlayerStatus, StatusEffect } from '../types/game.types';
+import { formatStatusEffect } from '../utils/StatusEffectManager';
 
 interface PlayerTableProps {
   players: Player[];
@@ -186,10 +187,6 @@ const getStatusEffectType = (effect: StatusEffect): string => {
   return effect.type || 'neutral';
 };
 
-const getStatusEffectName = (effect: StatusEffect): string => {
-  return effect.name || effect.id;
-};
-
 export const PlayerTable: React.FC<PlayerTableProps> = ({ players }) => {
   return (
     <Table>
@@ -227,7 +224,7 @@ export const PlayerTable: React.FC<PlayerTableProps> = ({ players }) => {
             <Td>
               {player.statusEffects.map((effect, index) => (
                 <StatusEffectBadge key={index} type={getStatusEffectType(effect)}>
-                  {getStatusEffectName(effect)}
+                  {formatStatusEffect(effect)}
                 </StatusEffectBadge>
               ))}
             </Td>

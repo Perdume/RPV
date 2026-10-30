@@ -40,6 +40,8 @@ export interface PlayerAction {
   evadeCount?: number;
   
   // 🆕 특수 입력 지원
+  abilityInput?: string;         // 능력 로그의 추가 입력 (<id> -> <id>, <?>)
+  untargeted?: boolean;          // 대상을 지정하지 않은 능력 사용
   additionalTargets?: number[];  // 동기화용
   prediction?: {                 // 선제예측용
     action: string;
@@ -132,6 +134,7 @@ export interface TurnResult {
   logs: string[];
   players: Player[];
   isDeathZone: boolean;
+  earlyProtectionCandidates?: number[]; // 초반 보호 선택지를 얻은 플레이어 번호
 }
 
 export interface ModifiableEvent<T = unknown> {
@@ -440,5 +443,5 @@ export type AbilityId =
 // 🆕 상태이상 ID 타입
 export type StatusEffectId = 
   | 'crack' | 'doom_sign' | 'will_loss' | 'damage_reduction' 
-  | 'damage_increase' | 'ability_seal' | 'action_seal' | 'ghost'
+  | 'damage_increase' | 'dealt_damage_increase' | 'taken_damage_reduction' | 'ability_seal' | 'action_seal' | 'ghost'
   | 'emphasized' | 'pass_coin'; 

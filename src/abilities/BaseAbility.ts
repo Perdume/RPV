@@ -86,6 +86,11 @@ export abstract class BaseAbility implements Ability {
     this.loadFromFile();
   }
 
+  // 번호 교체로 주인의 번호만 바뀔 때 사용 (저장된 변수는 다시 불러오지 않음)
+  transferOwner(playerId: number): void {
+    this.ownerId = playerId;
+  }
+
   getOwner(): number | null {
     return this.ownerId;
   }

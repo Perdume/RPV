@@ -83,6 +83,15 @@ const ABILITY_ID_MAP: { [key: string]: string } = {
   '원귀 강령': 'ghostSummoning'
 };
 
+// 같은 이름을 가진 능력 클래스가 둘 이상일 때 이름으로 선택할 능력 (공백 제거 기준)
+const SHARED_NAME_ABILITY_IDS: { [normalizedName: string]: string } = {
+  '다시불타는잿더미': 'risingAshes',
+  '운명교차': 'fateCross'
+};
+
+// 능력 ID/이름 비교용: 공백과 대소문자 무시
+const normalizeAbilityKey = (value: string): string => value.replace(/\s+/g, '').toLowerCase();
+
 export class AbilityManager {
   private static instance: AbilityManager | null = null; // 🔧 추가: singleton 인스턴스
   
@@ -250,16 +259,58 @@ export class AbilityManager {
     this.variables = new Map();
   }
 
-  assignAbility(playerId: number, abilityId: string): void {
-    const mappedAbilityId = this.mapAbilityId(abilityId);
-    const ability = this.abilities.get(mappedAbilityId);
-    if (ability) {
-      (ability as BaseAbility).setOwner(playerId);
-      (ability as BaseAbility).setAbilityManager(this as any);
-      this.playerAbilities.set(playerId, ability as BaseAbility);
-      this.sortedAbilitiesCache = null;
-      console.log(`[ABILITY] Owner 설정 완료: Player ${playerId} -> ${mappedAbilityId}`);
+  // 능력 ID 또는 이름으로 능력을 할당하고, 할당된 능력 ID를 반환 (없으면 null)
+  assignAbility(playerId: number, abilityId: string): string | null {
+    const resolvedAbilityId = this.resolveAbilityId(abilityId);
+    const ability = resolvedAbilityId ? this.abilities.get(resolvedAbilityId) : undefined;
+    if (!resolvedAbilityId || !ability) {
+      return null;
     }
+
+    (ability as BaseAbility).setOwner(playerId);
+    (ability as BaseAbility).setAbilityManager(this as any);
+    this.playerAbilities.set(playerId, ability as BaseAbility);
+    this.sortedAbilitiesCache = null;
+    console.log(`[ABILITY] Owner 설정 완료: Player ${playerId} -> ${resolvedAbilityId}`);
+    return resolvedAbilityId;
+  }
+
+  // 능력 ID 또는 표시 이름(공백·대소문자 무시)으로 등록된 능력 ID를 찾음
+  resolveAbilityId(abilityIdOrName: string): string | null {
+    const mappedAbilityId = this.mapAbilityId(abilityIdOrName);
+    if (this.abilities.has(mappedAbilityId)) {
+      return mappedAbilityId;
+    }
+
+    const normalized = normalizeAbilityKey(abilityIdOrName);
+    const sharedNameAbilityId = SHARED_NAME_ABILITY_IDS[normalized];
+    if (sharedNameAbilityId && this.abilities.has(sharedNameAbilityId)) {
+      return sharedNameAbilityId;
+    }
+
+    for (const [id, ability] of this.abilities) {
+      if (normalizeAbilityKey(id) === normalized || normalizeAbilityKey(ability.name) === normalized) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  // 두 플레이어의 번호가 교체될 때 능력도 함께 이동
+  swapPlayers(playerIdA: number, playerIdB: number): void {
+    const abilityA = this.playerAbilities.get(playerIdA);
+    const abilityB = this.playerAbilities.get(playerIdB);
+    this.playerAbilities.delete(playerIdA);
+    this.playerAbilities.delete(playerIdB);
+    if (abilityA) {
+      abilityA.transferOwner(playerIdB);
+      this.playerAbilities.set(playerIdB, abilityA);
+    }
+    if (abilityB) {
+      abilityB.transferOwner(playerIdA);
+      this.playerAbilities.set(playerIdA, abilityB);
+    }
+    this.sortedAbilitiesCache = null;
   }
 
   private mapAbilityId(abilityId: string): string {
@@ -489,7 +540,7 @@ export class AbilityManager {
       const result = await ability.execute(context, parameters);
       
       return {
-        success: true,
+        success: result.success,
         message: result.message || `${abilityName} 능력을 사용했습니다.`,
         damage: result.damage,
         heal: result.heal,

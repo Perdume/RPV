@@ -1,4 +1,4 @@
-import { StatusEffect, Player, GameEventType, ModifiableEvent, StatusEffectId } from '../types/game.types';
+import { StatusEffect, Player, PlayerStatus, GameEventType, ModifiableEvent, StatusEffectId } from '../types/game.types';
 import { EventSystem } from './eventSystem';
 
 // 🆕 상태이상 템플릿 인터페이스
@@ -9,11 +9,18 @@ interface StatusEffectTemplate {
   type: 'buff' | 'debuff' | 'neutral';
   stackable: boolean;
   maxStacks?: number;
+  refreshDuration?: number; // 부여받을 때마다 남은 턴 수를 이 값으로 갱신 (예: 균열 3턴)
   onTurnStart?: (playerId: number, stacks: number) => void;
   onTurnEnd?: (playerId: number, stacks: number) => void;
   onApply?: (playerId: number, stacks: number) => void;
   onRemove?: (playerId: number, stacks: number) => void;
   onDamageReceived?: (playerId: number, damage: number) => number;
+}
+
+// 상태이상 표기: "균열 3 (2)" = 수치 3, 남은 턴 수 2 (영구 효과는 남은 턴 수 생략)
+export function formatStatusEffect(effect: StatusEffect): string {
+  const remainingTurns = effect.duration > 0 ? ` (${effect.duration})` : '';
+  return `${effect.name || effect.id} ${effect.stacks ?? 1}${remainingTurns}`;
 }
 
 export class StatusEffectManager {
@@ -22,6 +29,10 @@ export class StatusEffectManager {
   private effectDefinitions: Map<StatusEffectId, StatusEffectTemplate> = new Map(); // 🆕 추가
   private eventSystem: EventSystem | null = null;
   private currentTurn: number = 0; // 🆕 추가
+  private players: Player[] = []; // 상태이상 피해 적용 대상 (TurnProcessor가 동기화)
+  private pendingLogs: string[] = []; // 턴 로그에 남길 상태이상 결과
+  // 다음 턴 등 지정한 턴 시작 시 부여할 상태이상
+  private scheduledEffects: Array<{ playerId: number; effectId: StatusEffectId; turn: number; duration: number; stacks: number }> = [];
 
   private constructor() {
     // 기본 상태이상 효과들 등록
@@ -56,20 +67,32 @@ export class StatusEffectManager {
     this.eventSystem = eventSystem;
   }
 
+  // 상태이상 피해를 적용할 플레이어 목록 설정
+  public setPlayers(players: Player[]): void {
+    this.players = players;
+  }
+
+  // 턴 로그에 남길 상태이상 결과를 가져오고 비움
+  public drainLogs(): string[] {
+    const logs = this.pendingLogs;
+    this.pendingLogs = [];
+    return logs;
+  }
+
   // 🆕 기본 상태이상 효과 등록
   private registerDefaultEffects(): void {
     // 균열
     this.effectDefinitions.set('crack', {
       id: 'crack',
       name: '균열',
-      description: '턴 종료시 수치가 3 이상이라면 피해를 1 받고 제거됩니다.',
+      description: '턴 종료시 수치가 3 이상이라면 1의 피해를 받으며, 부여받을 때마다 남은 턴 수가 3턴으로 갱신됩니다.',
       type: 'debuff',
       stackable: true,
       maxStacks: 10,
+      refreshDuration: 3,
       onTurnEnd: (playerId: number, stacks: number) => {
         if (stacks >= 3) {
-          this.dealDamage(playerId, 1);
-          this.removeStatusEffect(playerId, 'crack');
+          this.dealDamage(playerId, 1, '균열');
         }
       }
     });
@@ -100,22 +123,42 @@ export class StatusEffectManager {
       }
     });
 
-    // 피해 감소
+    // 가하는 피해 감소
     this.effectDefinitions.set('damage_reduction', {
       id: 'damage_reduction',
-      name: '피해 감소',
-      description: '가하는 피해가 1 감소합니다.',
+      name: '가하는 피해 감소',
+      description: '수치만큼 이번 턴 가하는 피해가 감소합니다.',
       type: 'debuff',
       stackable: true,
       maxStacks: 5
     });
 
-    // 피해 증가
+    // 받는 피해 증가
     this.effectDefinitions.set('damage_increase', {
       id: 'damage_increase',
-      name: '피해 증가',
-      description: '받는 피해가 1 증가합니다.',
+      name: '받는 피해 증가',
+      description: '이번 턴 받는 최종적 피해가 수치만큼 증가합니다. 피해를 받지 않았어도 공격을 받았다면 적용됩니다.',
       type: 'debuff',
+      stackable: true,
+      maxStacks: 5
+    });
+
+    // 가하는 피해 증가
+    this.effectDefinitions.set('dealt_damage_increase', {
+      id: 'dealt_damage_increase',
+      name: '가하는 피해 증가',
+      description: '수치만큼 이번 턴 가하는 피해가 증가합니다.',
+      type: 'buff',
+      stackable: true,
+      maxStacks: 6
+    });
+
+    // 받는 피해 감소
+    this.effectDefinitions.set('taken_damage_reduction', {
+      id: 'taken_damage_reduction',
+      name: '받는 피해 감소',
+      description: '수치만큼 이번 턴 받는 최종 피해가 감소합니다.',
+      type: 'buff',
       stackable: true,
       maxStacks: 5
     });
@@ -129,8 +172,33 @@ export class StatusEffectManager {
       return;
     }
 
-    const effect = this.createEffectFromTemplate(template, duration, stacks);
+    const effect = this.createEffectFromTemplate(template, template.refreshDuration ?? duration, stacks);
     this.addEffectToPlayer(playerId, effect);
+  }
+
+  // 지정한 턴이 시작될 때 상태이상을 부여 (예: 다음 턴 가하는 피해 증가)
+  public scheduleStatusEffect(playerId: number, effectId: StatusEffectId, turn: number, duration: number = 1, stacks: number = 1): void {
+    this.scheduledEffects.push({ playerId, effectId, turn, duration, stacks });
+  }
+
+  // 플레이어의 특정 상태이상 수치 (없으면 0)
+  public getStacks(playerId: number, effectId: StatusEffectId): number {
+    return this.getStatusEffect(playerId, effectId)?.stacks ?? 0;
+  }
+
+  // 두 플레이어의 번호가 교체될 때 상태이상도 함께 이동
+  public swapPlayers(playerIdA: number, playerIdB: number): void {
+    const effectsA = this.effects.get(playerIdA);
+    const effectsB = this.effects.get(playerIdB);
+    this.effects.delete(playerIdA);
+    this.effects.delete(playerIdB);
+    if (effectsA) this.effects.set(playerIdB, effectsA);
+    if (effectsB) this.effects.set(playerIdA, effectsB);
+
+    for (const scheduled of this.scheduledEffects) {
+      if (scheduled.playerId === playerIdA) scheduled.playerId = playerIdB;
+      else if (scheduled.playerId === playerIdB) scheduled.playerId = playerIdA;
+    }
   }
 
   // 🆕 템플릿에서 상태이상 생성
@@ -166,7 +234,8 @@ export class StatusEffectManager {
         effect.maxStacks || 999
       );
       existingEffect.stacks = newStacks;
-      existingEffect.duration = Math.max(existingEffect.duration, effect.duration);
+      existingEffect.duration = this.effectDefinitions.get(effect.id)?.refreshDuration
+        ?? Math.max(existingEffect.duration, effect.duration);
       
       console.log(`[상태이상] ${playerId}의 ${effect.name} 중첩: ${newStacks}`);
     } else if (!existingEffect) {
@@ -185,6 +254,13 @@ export class StatusEffectManager {
   // 🆕 턴 효과 처리
   public processTurnStart(currentTurn: number): void {
     this.currentTurn = currentTurn;
+
+    // 이번 턴에 부여하기로 예약된 상태이상 적용
+    const dueEffects = this.scheduledEffects.filter(scheduled => scheduled.turn <= currentTurn);
+    this.scheduledEffects = this.scheduledEffects.filter(scheduled => scheduled.turn > currentTurn);
+    for (const scheduled of dueEffects) {
+      this.applyStatusEffect(scheduled.playerId, scheduled.effectId, scheduled.duration, scheduled.stacks);
+    }
     
     for (const [playerId, effects] of this.effects.entries()) {
       effects.forEach(effect => {
@@ -209,7 +285,7 @@ export class StatusEffectManager {
           effect.onTurnEnd(playerId, effect.stacks);
         }
 
-        // 턴 종료 효과로 이미 제거된 경우 (예: 균열 3중첩)
+        // 턴 종료 효과로 이미 제거된 경우
         if (!this.getPlayerStatusEffects(playerId).includes(effect)) {
           continue;
         }
@@ -242,10 +318,14 @@ export class StatusEffectManager {
     }
   }
 
-  // 🆕 데미지 처리 헬퍼
-  private dealDamage(playerId: number, damage: number): void {
-    // 실제 구현에서는 GameState에서 플레이어를 찾아 데미지 적용
-    console.log(`[상태이상] ${playerId}에게 ${damage} 데미지 적용`);
+  // 상태이상으로 인한 피해 적용 (사망 판정은 TurnProcessor가 턴 종료 후 처리)
+  private dealDamage(playerId: number, damage: number, source: string): void {
+    const player = this.getPlayer(playerId);
+    if (!player || player.status === PlayerStatus.DEAD) return;
+
+    const oldHp = player.hp;
+    player.hp = Math.max(0, player.hp - damage);
+    this.pendingLogs.push(`[${source}] ${player.name}이(가) ${source}(으)로 ${damage}의 피해를 받았습니다. (체력: ${oldHp} → ${player.hp})`);
   }
 
   // 상태이상 제거
@@ -280,32 +360,9 @@ export class StatusEffectManager {
     return this.effects.get(playerId) || [];
   }
 
-  // 🆕 특수 상태이상 처리
-  public processSpecialEffects(): void {
-    for (const [playerId, effects] of this.effects.entries()) {
-      for (const effect of effects) {
-        // 균열 처리
-        if (effect.id === 'crack' && (effect.stacks || 0) >= 3) {
-          // 피해 1 적용
-          const player = this.getPlayer(playerId);
-          if (player) {
-            player.hp = Math.max(0, player.hp - 1);
-          }
-          
-          // 균열 제거
-          this.removeStatusEffect(playerId, 'crack');
-        }
-        
-        // 기타 특수 효과들...
-      }
-    }
-  }
-
   // 🆕 플레이어 정보 가져오기
   private getPlayer(playerId: number): Player | null {
-    // GameState에서 플레이어 정보를 가져와야 함
-    // 실제 구현에서는 GameState 참조가 필요
-    return null;
+    return this.players.find(p => p.id === playerId) ?? null;
   }
 
   // 상태이상 효과 적용
@@ -387,6 +444,8 @@ export class StatusEffectManager {
   // 모든 상태이상 초기화
   public clearAllStatusEffects(): void {
     this.effects.clear();
+    this.scheduledEffects = [];
+    this.pendingLogs = [];
   }
 
   // 특정 플레이어의 모든 상태이상 초기화

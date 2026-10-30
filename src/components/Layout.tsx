@@ -2,8 +2,8 @@ import React from 'react';
 import styled from 'styled-components';
 import { theme } from '../styles/theme';
 import { PlayerTable } from './PlayerTable';
-import { TurnControl } from './TurnControl';
-import { Player, PlayerStatus, PlayerAction } from '../types/game.types';
+import { Player, PlayerStatus } from '../types/game.types';
+import { DEATH_ZONE_INTERVAL, EXTREME_MAX_SURVIVORS, EXTREME_START_TURN } from '../utils/turnProcessor';
 
 const Container = styled.div`
   display: flex;
@@ -59,41 +59,42 @@ const TurnControlSection = styled.section`
   min-width: 0;
 `;
 
-// 헤더에 표시할 게임 정보 (App에서 불러온 data.json을 그대로 전달받음)
-interface HeaderGameData {
-  turn: number;
-  deathZone: {
-    stage: number;
-    nextReduction: number;
-  };
-}
+const ExtremeBadge = styled.span`
+  color: ${theme.colors.accent.danger};
+  font-weight: 600;
+`;
 
 interface LayoutProps {
   children?: React.ReactNode;
   players?: Player[];
-  gameData?: HeaderGameData | null;
-  currentTurn?: number;
-  onTurnComplete?: (actions: PlayerAction[]) => void;
+  currentTurn?: number; // 이번에 진행할 턴
+  controls?: React.ReactNode; // 오른쪽 패널 (행동 입력 등)
 }
 
 export const Layout: React.FC<LayoutProps> = ({ 
   children, 
   players = [], 
-  gameData = null,
-  currentTurn,
-  onTurnComplete = () => {} 
+  currentTurn = 1,
+  controls
 }) => {
+  const aliveCount = players.filter(p => p.status !== PlayerStatus.DEAD).length;
+  // 데스존: 매 5턴 종료시 최대 체력 1 감소
+  const deathZoneReductions = Math.floor(Math.max(0, currentTurn - 1) / DEATH_ZONE_INTERVAL);
+  const nextDeathZoneTurn = (deathZoneReductions + 1) * DEATH_ZONE_INTERVAL;
+  const isExtreme = currentTurn >= EXTREME_START_TURN && aliveCount <= EXTREME_MAX_SURVIVORS;
+
   return (
     <Container>
       <Header>
         <Title>🎮 Numbers Game Master Console</Title>
         <GameInfo>
-          <span>턴: {currentTurn ?? gameData?.turn ?? 0}</span>
+          <span>턴: {currentTurn}</span>
           <span>참가: {players.length}명</span>
           <span>생존: {players.filter(p => p.status === PlayerStatus.ALIVE).length}명</span>
           <span>부상: {players.filter(p => p.status === PlayerStatus.WOUNDED).length}명</span>
           <span>탈락: {players.filter(p => p.status === PlayerStatus.DEAD).length}명</span>
-          <span>데스존: {gameData?.deathZone.stage ?? 1}단계 (턴{gameData?.deathZone.nextReduction ?? 10})</span>
+          <span>데스존: 최대 체력 -{deathZoneReductions} (턴 {nextDeathZoneTurn} 종료시 감소)</span>
+          {isExtreme && <ExtremeBadge>극한</ExtremeBadge>}
         </GameInfo>
       </Header>
       <MainContent>
@@ -101,10 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <PlayerTable players={players} />
         </PlayerTableSection>
         <TurnControlSection>
-          <TurnControl 
-            players={players}
-            onTurnComplete={onTurnComplete}
-          />
+          {controls}
         </TurnControlSection>
       </MainContent>
       {children}
